@@ -94,3 +94,4 @@
 - 2026-10-09 — Gate de Fase 3 aprobado por el usuario (ADR-0001..0003 ratificados); inicia Fase 4 — Desarrollo (orquestador).
 - 2026-10-09 — T-30 HECHA: esqueleto uv/ruff/mypy/pytest, prueba de arquitectura con ast, guard de red (incl. asyncio/Proactor/UDP); 35 pruebas en verde; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones (desarrollador-python).
 - 2026-10-09 — T-31: CI (quality ubuntu+windows, coverage, audit con pip-audit fijado, integration condicionado), CODEOWNERS en borrador, .gitignore ampliado; revisores código y seguridad APROBADO CON OBSERVACIONES, aplicadas. BLOQUEADA a la espera de verificación en GitHub (ingeniero-devops).
+- 2026-10-09 — T-32 HECHA: QueryStatus (incl. VALIDADA_COPIA_RUT), SourceKind, excepciones sin mensaje libre, enmascarado (≤ 6 caracteres → todo *; ≥ 7 → últimos 4; regex sin \s); 86 pruebas; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones (desarrollador-python).
