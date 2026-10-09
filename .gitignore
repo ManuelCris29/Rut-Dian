@@ -1,7 +1,10 @@
 # Datos reales y salidas (contienen datos personales)
 data/
 output/
+output*/
 logs/
+*.jsonl
+snapshot_*.html
 *.xlsx
 *.csv
 !tests/fixtures/**/*.csv

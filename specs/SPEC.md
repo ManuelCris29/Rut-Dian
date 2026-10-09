@@ -47,7 +47,7 @@ validación documental o contingencia manual — sin reescribir el resto.
 | RF-11 | Evitar consultas duplicadas dentro del mismo lote | Should |
 | RF-12 | Modo contingencia: genera registro "pendiente de validación manual" cuando el canal no está disponible | Must |
 | RF-13 | Interfaz gráfica | Won't (MVP) — CLI + archivos |
-| RF-14 | Revalidación periódica de la base de terceros | Could (post-MVP; periodicidad RN-04 pendiente) |
+| RF-14 | Revalidación periódica de la base de terceros | Won't (MVP) — RN-04 [CONFIRMADO 2026-10-09]: se revalida solo al vincular o renovar; sin periodicidad automática |
 
 **Contexto confirmado (2026-10-09):** 100–500 consultas/mes, frecuencia mixta, modo asistido aceptado,
 sin presupuesto para proveedor comercial y sin convenio con la DIAN → tras la Fase 2 (RN-08 modificada): fuente base = copia del RUT del tercero (≤ 30 días)

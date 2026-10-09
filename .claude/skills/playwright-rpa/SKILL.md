@@ -58,6 +58,6 @@ detection:
 - Marcar `@pytest.mark.portal_real` cualquier prueba que use la URL real; excluida por defecto en `pyproject.toml` (`addopts = "-m 'not portal_real'"`).
 
 ## Mantenimiento ante cambios del portal
-1. `ESTRUCTURA_CAMBIADA` en producción → snapshot sanitizado en `logs/`.
+1. `ESTRUCTURA_CAMBIADA` en producción → se detiene el lote. El snapshot de diagnóstico está **DESACTIVADO por defecto** (D-5, 2026-10-09). Solo con `RUT_DIAGNOSTIC_SNAPSHOT=true` y `RUT_PORTAL_APPROVAL_REF` vigente se guarda `logs/snapshot_<run_id>_<row_index>.html`: solo esqueleto estructural (etiquetas, `id`, `class`, `name`, `role`, `aria-*`, `for`), con todo texto, `value`, `title`, `alt` y `placeholder` vaciados, sin `script`/`iframe` ni `src`/`href` con parámetros. Nunca screenshot, trace, video ni HAR. Retención 30 días (`purgar`). Ver `docs/ARQUITECTURA.md` §10.
 2. `investigador-dian` documenta el nuevo DOM en `docs/investigacion/`.
 3. `ingeniero-rpa` actualiza `selectors.yaml` + fixture + prueba; sube `version`.

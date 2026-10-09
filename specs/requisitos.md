@@ -39,7 +39,7 @@ flowchart TD
 ```
 
 **Disparadores (frecuencia mixta):** (a) bajo demanda, al vincular un tercero o al recibir un lote;
-(b) revalidación periódica de la base de terceros (periodicidad [PENDIENTE], ver RN-04).
+(b) revalidación al vincular o renovar al tercero (RN-04 [CONFIRMADO] 2026-10-09; sin periodicidad automática en el MVP).
 
 ## Actores
 
@@ -57,10 +57,10 @@ flowchart TD
 | RN-01 | Solo dígitos; sin puntos, guiones ni espacios tras normalizar | [SUPUESTO] |
 | RN-02 | Se aceptan cédulas y NIT. Si se recibe NIT con DV, se valida el DV antes de consultar | [CONFIRMADO] tipo · [SUPUESTO] validación DV |
 | RN-03 | Estados válidos del RUT: los que muestre el canal oficial, sin reinterpretarlos | [PENDIENTE] Fase 2 (T-14) |
-| RN-04 | Un resultado tiene validez de N días (define la periodicidad de revalidación) | [PENDIENTE] |
+| RN-04 | La revalidación se hace solo al vincular o renovar al tercero; el MVP no tiene periodicidad automática (D-2) | [CONFIRMADO] 2026-10-09 |
 | RN-05 | Duplicados en un lote se consultan una sola vez | [SUPUESTO] |
 | RN-06 | Los resultados se conservan 1 año y luego se eliminan | [CONFIRMADO] 2026-10-09 |
-| RN-07 | Si el canal no está disponible y el tercero entregó copia del RUT, el operador puede validar contra ella (queda `PENDIENTE_VALIDACION_MANUAL` con observación). La copia debe tener ≤ 30 días; si es más antigua → `PENDIENTE_VALIDACION_MANUAL` con observación "copia vencida". El PDF no lo procesa la herramienta (ver INFORME-VIABILIDAD §8) | [CONFIRMADO] antigüedad ≤ 30 días (usuario, 2026-10-09) · la copia solo existe "a veces" |
+| RN-07 | Si el canal no está disponible y el tercero entregó copia del RUT, el operador puede validar contra ella (queda `VALIDADA_COPIA_RUT` con fecha del documento y responsable; D-1, 2026-10-09; nombre y estado no se transcriben, D-3). La copia debe tener ≤ 30 días; si es más antigua → `PENDIENTE_VALIDACION_MANUAL` con observación "copia vencida". El PDF no lo procesa la herramienta (ver INFORME-VIABILIDAD §8) | [CONFIRMADO] antigüedad ≤ 30 días (usuario, 2026-10-09) · la copia solo existe "a veces" |
 | RN-08 | Sin convenio institucional ni presupuesto para proveedor. Fuente: copia del RUT del tercero (≤ 30 días) + contingencia manual como base; portal público "Consulta Estado RUT" vía RPA asistido solo si se cumplen las condiciones de INFORME-VIABILIDAD.md | [CONFIRMADO] 2026-10-09 (modificada en Fase 2) |
 
 ## Respuestas del responsable del requerimiento (2026-10-09)
@@ -90,7 +90,8 @@ está restringido por CLAUDE.md §3.
 
 ### Preguntas abiertas (no bloquean el gate; quedan como supuestos)
 - ¿Hay picos de volumen (cierre de mes, convocatorias)? → SUPUESTO: lote máx. 200 por ejecución.
-- Periodicidad de revalidación (RN-04) → SUPUESTO: se decide en Fase 3; MVP solo bajo demanda.
+- ~~Periodicidad de revalidación (RN-04)~~ → [CONFIRMADO] 2026-10-09: solo al vincular o renovar (D-2).
+- Entrada: solo el número; DV opcional (columna `dv` o separador `-`); sin columna de tipo CC/NIT → [CONFIRMADO] 2026-10-09 (P-4).
 - ¿Quién es el operador y quién puede ver los resultados? → SUPUESTO: área solicitante + operador.
 
 ## Indicadores (línea base por medir antes de calcular ahorros)
