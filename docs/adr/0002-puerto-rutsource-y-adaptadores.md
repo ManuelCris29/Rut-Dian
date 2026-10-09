@@ -36,8 +36,8 @@
 
 ```python
 class RutSourcePort(Protocol):
-    kind: SourceKind          # valor que se escribe en la columna `fuente`
-    paced: bool               # True si consulta un sistema externo → aplica ritmo RNF-02
+    kind: SourceKind  # valor que se escribe en la columna `fuente`
+    paced: bool  # True si consulta un sistema externo → aplica ritmo RNF-02
 
     def query(self, ident: IdentificationInput) -> RutResult:
         """Devuelve un resultado de negocio o lanza una RutCheckerError. Nunca devuelve datos vacíos

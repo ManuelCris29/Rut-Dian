@@ -43,8 +43,8 @@ Puerto hacia el operador (`src/rut_checker/ports/operator.py`):
 
 ```python
 class OperatorPort(Protocol):
-    def notify(self, message: str) -> None: ...          # mensaje sin id completo
-    def confirm_continue(self, message: str) -> bool: ... # False si no hay terminal interactiva
+    def notify(self, message: str) -> None: ...  # mensaje sin id completo
+    def confirm_continue(self, message: str) -> bool: ...  # False si no hay terminal interactiva
 ```
 
 Implementaciones: `ConsoleOperator` (Typer: `typer.echo(..., err=True)`, `typer.confirm`) y, en pruebas,

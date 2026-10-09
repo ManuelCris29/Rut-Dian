@@ -1,0 +1,73 @@
+[project]
+name = "rut-checker"
+version = "0.1.0"
+description = "Consulta automatizada del estado del RUT (DIAN) en modo asistido"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "typer>=0.12",
+    "openpyxl>=3.1",
+    "python-stdnum>=1.20",
+    "defusedxml>=0.7",
+    "tzdata>=2024.1",
+]
+
+[project.optional-dependencies]
+# Canal del portal (ADR-0001): solo se instala en el equipo del operador.
+portal = [
+    "playwright>=1.45",
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "types-pyyaml>=6.0",
+    "types-openpyxl>=3.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.13"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [".claude", ".playwright-mcp"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "S", "PT", "N", "ANN", "TID"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "ANN"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+mypy_path = "src"
+packages = ["rut_checker"]
+
+[tool.pytest.ini_options]
+addopts = "-m 'not portal_real' -q --strict-markers -p pytester"
+xfail_strict = true
+markers = ["portal_real: requiere el portal real de la DIAN; solo manual con aprobación"]
+testpaths = ["tests"]
+
+# Cobertura (RNF-05): umbral 85 % sobre domain y application. Aún no hay código en esas capas
+# (T-30 solo crea el esqueleto), así que no se fuerza en addopts; se activa con
+# `uv run pytest --cov --cov-fail-under=85` y se incorporará a la CI desde T-31.
+[tool.coverage.run]
+source = ["rut_checker.domain", "rut_checker.application"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true

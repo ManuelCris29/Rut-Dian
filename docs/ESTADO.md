@@ -89,3 +89,4 @@
 - 2026-10-09 — Fase 3: T-20..T-24 entregadas (arquitecto). Revisión de seguridad del diseño: APROBADO CON OBSERVACIONES, 6 mayores y 9 menores (revisor-seguridad). Usuario decide D-1..D-5, P-4 y Gherkin G9–G12 (orquestador). Arquitecto aplicando correcciones.
 - 2026-10-09 — Fase 3: correcciones aplicadas (arquitecto); re-verificación de seguridad APROBADO; 5 pendientes menores corregidos (orquestador). Fase 3 lista para gate.
 - 2026-10-09 — Gate de Fase 3 aprobado por el usuario (ADR-0001..0003 ratificados); inicia Fase 4 — Desarrollo (orquestador).
+- 2026-10-09 — T-30 HECHA: esqueleto uv/ruff/mypy/pytest, prueba de arquitectura con ast, guard de red (incl. asyncio/Proactor/UDP); 35 pruebas en verde; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones (desarrollador-python).
