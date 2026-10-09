@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-**Fase actual:** 3 — Diseño
+**Fase actual:** 4 — Desarrollo
 **Estado de la fase:** EN_CURSO
 **Última actualización:** 2026-10-09
 
@@ -10,8 +10,8 @@
 |---|---|---|---|
 | 1. Requisitos | APROBADA | usuario | 2026-10-09 |
 | 2. Viabilidad | APROBADA | usuario | 2026-10-09 |
-| 3. Diseño | EN_CURSO | — | — |
-| 4. Desarrollo | PENDIENTE | — | — |
+| 3. Diseño | APROBADA | usuario | 2026-10-09 |
+| 4. Desarrollo | EN_CURSO | — | — |
 | 5. Pruebas | PENDIENTE | — | — |
 | 6. Producción | PENDIENTE | — | — |
 
@@ -33,6 +33,13 @@
 | 2026-10-09 | Antigüedad máxima de la copia del RUT aceptada: ≤ 30 días | decisión del usuario |
 | 2026-10-09 | Copias del RUT: repositorio documental de acceso restringido, fuera del repo; nunca procesadas por la herramienta ni por IA | revisión de seguridad |
 | 2026-10-09 | Uso interno exclusivo de la empresa responsable; la herramienta no se ofrece a terceros | Términos de uso DIAN |
+| 2026-10-09 | D-1: nuevo estado `VALIDADA_COPIA_RUT` para filas validadas contra copia ≤ 30 días | ADR-0002, excepciones.md |
+| 2026-10-09 | D-2 (RN-04): revalidación solo al vincular/renovar; sin periodicidad en el MVP | requisitos.md RN-04 |
+| 2026-10-09 | D-3: el operador no transcribe nombre/estado desde la copia del RUT (minimización) | ADR-0002 |
+| 2026-10-09 | D-4: fixtures HTML sintéticos permitidos solo para probar el mecanismo de detección/pausa, con condiciones de revisor-seguridad | ADR-0003, tareas T-38/T-49 |
+| 2026-10-09 | D-5: snapshot de diagnóstico ante ESTRUCTURA_CAMBIADA desactivado por defecto; si se activa, solo esqueleto estructural sin textos | ARQUITECTURA, excepciones.md |
+| 2026-10-09 | P-4: entrada = una columna con el número; DV opcional | ARQUITECTURA |
+| 2026-10-09 | Gherkin G9–G12 incorporados a criterios de aceptación | criterios-aceptacion.md |
 
 ## Supuestos activos
 
@@ -55,6 +62,11 @@
 | R-08 | El RUT "no tiene carácter de registro público" (Oficio 1350/2019; ET 555-2, 583, 584): conservar/reutilizar resultados 1 año podría exceder "los fines de su creación" | Media | Alto | Concepto jurídico + preguntas en PQRSD |
 | R-09 | Falta autorización de tratamiento de terceros (Ley 1581 art. 9) / política de tratamiento / RNBD | Media | Alto | Autorización en formatos de vinculación como precondición de C y E |
 | R-10 | Copias del RUT contienen datos excedentes (incl. cédulas de representantes/contador) | Media | Alto | Minimización: solo metadatos en la herramienta; PDF en repositorio restringido con retención definida |
+| R-11 | Fuga de ids/nombres por mensajes de excepción de terceros (call log de Playwright, tracebacks con locales de Typer) | Media | Alto | Solo error_code y clase en logs; show_locals=False; MaskingFilter sobre exc_info; pruebas T-40/T-43 |
+| R-12 | Archivos con datos personales fuera de `output/` (OneDrive, repo, rutas arbitrarias) | Media | Alto | --salida restringido a RUT_OUTPUT_DIR; guía de carpeta y ACL (T-60); purgar cubre data/output/logs |
+| R-13 | Selectores sintéticos o aprobación falsa habilitan el portal (E) sin cumplir (a)–(d) | Baja | Alto | Triple llave endurecida (formato APPROVAL_REF, synthetic rechazado, host *.dian.gov.co); el registro de aprobación en ESTADO.md cita evidencia de (a)–(d) con fecha y firmante |
+| R-14 | Inyección de fórmulas / XML malicioso en Excel | Baja | Medio | Neutralizar `= + - @ \t \r`; defusedxml |
+| R-15 | Conservar 1 año resultados del portal (V-10) excede "fines de su creación" | Media | Alto | Retención configurable ≤ 365; purgar --fuente PORTAL_DIAN_C1; concepto jurídico |
 
 ## Pendientes / bloqueos
 
@@ -74,3 +86,6 @@
 - 2026-10-09 — Fase 2: T-10..T-13, T-15, T-16 hechas; T-14 bloqueada por mantenimiento (investigador-dian). Revisión de seguridad: APROBADO CON OBSERVACIONES, 4 mayores y 8 menores (revisor-seguridad). Usuario acepta C+F / E condicionado y copia RUT ≤ 30 días (orquestador).
 - 2026-10-09 — Correcciones aplicadas (investigador-dian); re-verificación de seguridad APROBADO (revisor-seguridad); SPEC H1/§4 y RN-07 actualizados (orquestador). Fase 2 lista para gate.
 - 2026-10-09 — Gate de Fase 2 aprobado por el usuario; inicia Fase 3 — Diseño (orquestador).
+- 2026-10-09 — Fase 3: T-20..T-24 entregadas (arquitecto). Revisión de seguridad del diseño: APROBADO CON OBSERVACIONES, 6 mayores y 9 menores (revisor-seguridad). Usuario decide D-1..D-5, P-4 y Gherkin G9–G12 (orquestador). Arquitecto aplicando correcciones.
+- 2026-10-09 — Fase 3: correcciones aplicadas (arquitecto); re-verificación de seguridad APROBADO; 5 pendientes menores corregidos (orquestador). Fase 3 lista para gate.
+- 2026-10-09 — Gate de Fase 3 aprobado por el usuario (ADR-0001..0003 ratificados); inicia Fase 4 — Desarrollo (orquestador).
