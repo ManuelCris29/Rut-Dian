@@ -16,13 +16,13 @@ Una tarea de Fase N no inicia hasta que la Fase N-1 esté cerrada en `docs/ESTAD
 
 | ID | Tarea | Entregable | Estado |
 |---|---|---|---|
-| T-10 | Verificar estado de la URL original (fecha/hora, captura sin datos) | docs/investigacion/01-estado-url.md | TODO |
-| T-11 | Inventario de canales oficiales DIAN (consulta estado, copia RUT, servicios para terceros, API/interoperabilidad, soporte) | 02-canales-oficiales.md | TODO |
-| T-12 | Condiciones de uso, protección de datos y restricciones a la automatización | 03-condiciones-uso.md | TODO |
-| T-13 | Evidencia de cómo lo resuelven empresas y proveedores (con fuentes) | 04-practicas-mercado.md | TODO |
-| T-14 | Análisis técnico del canal elegible: formulario, desafíos de seguridad, sesión, tiempos (exploración manual asistida, ≤ 5 consultas con números del propio equipo autorizados) | 05-analisis-tecnico.md + snapshot sanitizado | TODO |
-| T-15 | Tabla comparativa A–F y recomendación | docs/investigacion/INFORME-VIABILIDAD.md | TODO |
-| T-16 | Redactar consulta formal a la DIAN (PQRSD) sobre canal autorizado para terceros | 06-borrador-pqrsd.md | TODO |
+| T-10 | Verificar estado de la URL original (fecha/hora, captura sin datos) | docs/investigacion/01-estado-url.md | HECHA (2026-10-09 14:20:55 COT: 302 → imagen de mantenimiento; verificación del humano pendiente) |
+| T-11 | Inventario de canales oficiales DIAN (consulta estado, copia RUT, servicios para terceros, API/interoperabilidad, soporte) | 02-canales-oficiales.md | HECHA |
+| T-12 | Condiciones de uso, protección de datos y restricciones a la automatización | 03-condiciones-uso.md | HECHA (interpretación jurídica de 2 puntos [PENDIENTE]) |
+| T-13 | Evidencia de cómo lo resuelven empresas y proveedores (con fuentes) | 04-practicas-mercado.md | HECHA |
+| T-14 | Análisis técnico del canal elegible: formulario, desafíos de seguridad, sesión, tiempos (exploración manual asistida, ≤ 5 consultas con números del propio equipo autorizados) | 05-analisis-tecnico.md + snapshot sanitizado | BLOQUEADA (servicio en mantenimiento; protocolo y plantilla listos en 05) |
+| T-15 | Tabla comparativa A–F y recomendación | docs/investigacion/INFORME-VIABILIDAD.md | HECHA (espera revisor-seguridad y decisión humana) |
+| T-16 | Redactar consulta formal a la DIAN (PQRSD) sobre canal autorizado para terceros | 06-borrador-pqrsd.md | HECHA (borrador; radicación pendiente del humano) |
 
 ## Fase 3 — Diseño (agente: arquitecto)
 

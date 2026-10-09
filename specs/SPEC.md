@@ -20,7 +20,7 @@ Es lento, repetitivo, propenso a errores y no deja trazabilidad.
 
 | # | Hallazgo | Clasificación |
 |---|---|---|
-| H1 | El portal `https://muisca.dian.gov.co/WebRutMuisca/DefConsultaEstadoRUT.faces` fue reportado en mantenimiento por el responsable del proyecto (imagen oficial `Mantenimiento-Consulta-RUT.jpg`). Desde el entorno de análisis la URL devolvió error de servidor. | [PENDIENTE] verificar en navegador real y registrar fecha/hora |
+| H1 | El portal `https://muisca.dian.gov.co/WebRutMuisca/DefConsultaEstadoRUT.faces` fue reportado en mantenimiento por el responsable del proyecto (imagen oficial `Mantenimiento-Consulta-RUT.jpg`). Verificado en navegador real el 2026-10-09 14:20:55 COT: 302 → imagen oficial de mantenimiento, sin fecha de regreso (`docs/investigacion/01-estado-url.md`). | [CONFIRMADO] 2026-10-09 |
 | H2 | Proveedores comerciales (Kontalid, ConsultorContable, Actualícese) automatizan el portal público y declaran que dependen de que la DIAN "lo permita". | [CONFIRMADO] en sus páginas comerciales |
 | H3 | El portal usa una verificación tipo Cloudflare/captcha; la opción "Estado del RUT" se reportó intermitente en mayo–junio de 2026 (comentarios de un proveedor, no fuente oficial). | [PENDIENTE] confirmar en el portal |
 | H4 | No se encontró una API pública oficial de la DIAN para consulta del estado del RUT por terceros. | [PENDIENTE] confirmar con DIAN (PQRSD / canales de servicio) |
@@ -50,8 +50,9 @@ validación documental o contingencia manual — sin reescribir el resto.
 | RF-14 | Revalidación periódica de la base de terceros | Could (post-MVP; periodicidad RN-04 pendiente) |
 
 **Contexto confirmado (2026-10-09):** 100–500 consultas/mes, frecuencia mixta, modo asistido aceptado,
-sin presupuesto para proveedor comercial y sin convenio con la DIAN → la fuente objetivo es el portal
-público "Consulta Estado RUT". Detalle en `specs/requisitos.md`.
+sin presupuesto para proveedor comercial y sin convenio con la DIAN → tras la Fase 2 (RN-08 modificada): fuente base = copia del RUT del tercero (≤ 30 días)
++ contingencia manual; el portal público "Consulta Estado RUT" vía RPA asistido solo si se cumplen las
+condiciones de `docs/investigacion/INFORME-VIABILIDAD.md` §8. Detalle en `specs/requisitos.md`.
 
 ## 5. Datos
 

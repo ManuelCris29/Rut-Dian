@@ -60,8 +60,8 @@ flowchart TD
 | RN-04 | Un resultado tiene validez de N días (define la periodicidad de revalidación) | [PENDIENTE] |
 | RN-05 | Duplicados en un lote se consultan una sola vez | [SUPUESTO] |
 | RN-06 | Los resultados se conservan 1 año y luego se eliminan | [CONFIRMADO] 2026-10-09 |
-| RN-07 | Si el canal no está disponible y el tercero entregó copia del RUT, el operador puede validar contra ella (queda `PENDIENTE_VALIDACION_MANUAL` con observación) | [SUPUESTO] — la copia solo existe "a veces" |
-| RN-08 | Solo canal público "Consulta Estado RUT"; no hay convenio institucional ni presupuesto para proveedor comercial | [CONFIRMADO] 2026-10-09 |
+| RN-07 | Si el canal no está disponible y el tercero entregó copia del RUT, el operador puede validar contra ella (queda `PENDIENTE_VALIDACION_MANUAL` con observación). La copia debe tener ≤ 30 días; si es más antigua → `PENDIENTE_VALIDACION_MANUAL` con observación "copia vencida". El PDF no lo procesa la herramienta (ver INFORME-VIABILIDAD §8) | [CONFIRMADO] antigüedad ≤ 30 días (usuario, 2026-10-09) · la copia solo existe "a veces" |
+| RN-08 | Sin convenio institucional ni presupuesto para proveedor. Fuente: copia del RUT del tercero (≤ 30 días) + contingencia manual como base; portal público "Consulta Estado RUT" vía RPA asistido solo si se cumplen las condiciones de INFORME-VIABILIDAD.md | [CONFIRMADO] 2026-10-09 (modificada en Fase 2) |
 
 ## Respuestas del responsable del requerimiento (2026-10-09)
 
