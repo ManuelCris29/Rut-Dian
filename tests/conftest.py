@@ -21,11 +21,14 @@ Límites conocidos (no cubiertos):
 import asyncio
 import asyncio.base_events
 import asyncio.proactor_events as proactor_events
+import os
 import socket
 from collections.abc import Callable, Iterator
 from typing import Any, NoReturn
 
 import pytest
+
+from rut_checker.infra.settings import Settings
 
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
@@ -139,3 +142,21 @@ def _network_guard_scope(request: pytest.FixtureRequest) -> Iterator[None]:
         yield
     finally:
         _state["enabled"] = True
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _isolate_settings_from_real_env() -> Iterator[None]:
+    """Ninguna prueba lee el `.env` real ni variables `RUT_*` heredadas del entorno.
+
+    Se desactiva `env_file` en la configuración de `Settings` (así un `Settings()` sin
+    argumentos tampoco toca el `.env` del repositorio) y se limpian las variables `RUT_*`.
+    Las pruebas que necesiten valores usan `monkeypatch.setenv`.
+    """
+    previous = Settings.model_config.get("env_file")
+    Settings.model_config["env_file"] = None
+    with pytest.MonkeyPatch.context() as patch:
+        for name in list(os.environ):
+            if name.upper().startswith("RUT_"):
+                patch.delenv(name)
+        yield
+    Settings.model_config["env_file"] = previous

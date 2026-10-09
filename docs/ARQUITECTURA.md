@@ -416,9 +416,12 @@ RUT_OUTPUT_DIR=output
 RUT_LOG_DIR=logs
 ```
 
-Validadores de `Settings` (pydantic-settings, `env_prefix="RUT_"`): delay ≥ 3; `HUMAN_CHALLENGE_TIMEOUT_S`
-entre 30 y 900; `MAX_RETRIES` entre 0 y 2; `MAX_BATCH_SIZE` entre 1 y 200 [SUPUESTO]; `RETENTION_DAYS` ≤ 365;
-`PORTAL_APPROVAL_REF` vacío o `^APR-\d{8}-\d{1,3}$`; `PORTAL_URL` `https` con host `*.dian.gov.co`;
+Validadores de `Settings` (pydantic-settings, `env_prefix="RUT_"`): delay entre 3 y 600 (sin `inf`/`nan`);
+`NAVIGATION_TIMEOUT_S` entre 1 y 300; `HUMAN_CHALLENGE_TIMEOUT_S` entre 30 y 900; `MAX_RETRIES` entre 0 y 2;
+`RETRY_BACKOFF_S` con al menos `MAX_RETRIES` valores y cada uno ≥ 3 s; `MAX_BATCH_SIZE` entre 1 y 200
+[SUPUESTO]; `RETENTION_DAYS` entre 1 y 365; `PORTAL_APPROVAL_REF` vacío o `^APR-\d{8}-\d{1,3}$` con fecha
+real (`AAAAMMDD` válida); `PORTAL_URL` `https`, host con fullmatch `([a-z0-9-]+\.)+dian\.gov\.co`, puerto
+443 (o ausente), sin userinfo y sin `\`, espacios ni caracteres de control (Chromium trata `\` como `/`);
 `RUT_SOURCE=dian_portal` exige `HEADLESS=false`; `DIAGNOSTIC_SNAPSHOT=true` exige `APPROVAL_REF` válido.
 Constantes no configurables: 2 bloqueos seguidos detienen el lote; 3 `TIEMPO_AGOTADO` seguidos abren el
 circuito; copia ≤ 30 días; retención de snapshots 30 días; zona `America/Bogota`.

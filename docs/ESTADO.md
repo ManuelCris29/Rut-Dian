@@ -79,6 +79,10 @@
 - T-31 BLOQUEADA (humano): crear remoto GitHub, push, rama `verif/ci-rojo` (prueba fallida + `sed` de requests==2.19.0 en el requirements exportado) → rojo en quality/audit, revertir → verde; reemplazar `<<PROPIETARIO>>` en `.github/CODEOWNERS` y activar "Require review from Code Owners".
 - Humano (opcional): ampliar `.claude/hooks/bloquear_evasion.py` con `ignore_default_args`, `add_init_script`, `extra_http_headers`, `ignore_https_errors`, `clear_cookies` (propuesta revisor-seguridad Fase 3).
 - Para T-38: `context.route` que aborte todo salvo localhost/file://; valorar cubrir `getaddrinfo` en el guard; pruebas `portal_real` con variable de opt-in explícita (revisor-seguridad).
+- Para T-37/T-40 (revisor-seguridad T-33): pruebas de `build_service` con `dian_portal` sin `RUT_PORTAL_ENABLED`, `fake` sin `RUT_ALLOW_FAKE`, y snapshot con fuente distinta del portal (valorar exigir `portal_enabled`). La CLI muestra si cargó `.env` y desde qué ruta (sin valores); T-60 documenta ejecutar desde la raíz.
+- Para T-43: `MaskingFilter` también sobre `record.exc_text`/`stack_info` y excepciones encadenadas (`__cause__` de Playwright); adaptadores con `from None` o solo `type(exc).__name__`; prueba con excepción encadenada que lleve un id.
+- Para T-46/T-40b: crear `output/` y `logs/` con permisos restringidos; aviso si la ruta está en OneDrive/Dropbox/Google Drive.
+- Para T-36 (servicio): pausa efectiva antes de reintento = max(min_delay, backoff).
 
 ## Bitácora
 
@@ -95,3 +99,4 @@
 - 2026-10-09 — T-30 HECHA: esqueleto uv/ruff/mypy/pytest, prueba de arquitectura con ast, guard de red (incl. asyncio/Proactor/UDP); 35 pruebas en verde; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones (desarrollador-python).
 - 2026-10-09 — T-31: CI (quality ubuntu+windows, coverage, audit con pip-audit fijado, integration condicionado), CODEOWNERS en borrador, .gitignore ampliado; revisores código y seguridad APROBADO CON OBSERVACIONES, aplicadas. BLOQUEADA a la espera de verificación en GitHub (ingeniero-devops).
 - 2026-10-09 — T-32 HECHA: QueryStatus (incl. VALIDADA_COPIA_RUT), SourceKind, excepciones sin mensaje libre, enmascarado (≤ 6 caracteres → todo *; ≥ 7 → últimos 4; regex sin \s); 86 pruebas; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones (desarrollador-python).
+- 2026-10-09 — T-33 HECHA: Settings (pydantic-settings, valores seguros, triple llave: APPROVAL_REF con fecha real, URL https solo *.dian.gov.co:443 sin userinfo ni \, backoff ≥ 3 y ≥ max_retries), .env.example, aislamiento del .env real en pruebas; 157 pruebas; revisor-codigo APROBADO CON OBSERVACIONES; revisor-seguridad BLOQUEANTE (evasión de URL con \) → corregido → APROBADO CON OBSERVACIONES (desarrollador-python).

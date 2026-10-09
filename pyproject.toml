@@ -54,6 +54,7 @@ ban-relative-imports = "all"
 strict = true
 python_version = "3.12"
 mypy_path = "src"
+plugins = ["pydantic.mypy"]
 packages = ["rut_checker"]
 
 [tool.pytest.ini_options]
