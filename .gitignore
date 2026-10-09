@@ -22,6 +22,14 @@ snapshot_*.html
 screenshots/
 traces/
 
+# Capturas y trazas de red/navegador (pueden contener datos personales)
+*.png
+*.jpg
+*.jpeg
+*.har
+*.html
+!tests/fixtures/html/**/*.html
+
 # Python
 __pycache__/
 *.py[cod]

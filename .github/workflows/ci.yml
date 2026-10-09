@@ -1,0 +1,186 @@
+# CI de rut-checker (T-31). Todo corre offline: ningún job contacta el portal de la DIAN
+# (CLAUDE.md §3, ADR-0003). Sin secretos y sin variables RUT_*: las pruebas fijan su propia
+# configuración con monkeypatch. Las pruebas `portal_real` están excluidas por addopts
+# en pyproject.toml y aquí además se pasa `-m "not portal_real"` de forma explícita.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Permisos mínimos: solo lectura del contenido.
+permissions:
+  contents: read
+
+# Cancela ejecuciones obsoletas de la misma rama / PR.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Solo cancela en PR; en main cada push termina su ejecución.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # `uv sync` y `uv export` llevan `--locked` explícito; la variable cubre `uv run`/`uvx`,
+  # que de otro modo podrían re-resolver y modificar uv.lock en silencio durante el job.
+  UV_LOCKED: "1"
+  PYTHON_VERSION: "3.12"
+  UV_VERSION: "0.10.9" # misma versión de uv que usa el equipo de desarrollo
+
+jobs:
+  quality:
+    name: Calidad y pruebas (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Instalar uv (con caché)
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      # Sin extra `portal`: el núcleo y las pruebas no requieren Playwright (ADR-0001).
+      - name: Sincronizar dependencias
+        run: uv sync --locked
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: Ruff (formato)
+        run: uv run ruff format --check .
+
+      - name: Mypy
+        run: uv run mypy src tests
+
+      # tests/integration necesita el extra `portal`, que este job no instala: va en `integration`.
+      - name: Pruebas offline
+        run: uv run pytest -m "not portal_real" --ignore=tests/integration
+
+  # Cobertura (RNF-05): una sola vez, en Linux.
+  coverage:
+    name: Cobertura
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Instalar uv (con caché)
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Sincronizar dependencias
+        run: uv sync --locked
+
+      # Umbral 85 % sobre domain y application (configurado en pyproject.toml).
+      # TODO: retirar este guard cuando domain/ y application/ tengan código (Fase 4); desde
+      # entonces la cobertura debe ejecutarse siempre y fallar si no se alcanza el umbral.
+      - name: Cobertura (domain y application)
+        run: |
+          if find src/rut_checker/domain src/rut_checker/application -name '*.py' ! -name '__init__.py' 2>/dev/null | grep -q .; then
+            uv run pytest -m "not portal_real" --ignore=tests/integration --cov --cov-fail-under=85
+          else
+            echo "domain/application sin código aún: cobertura omitida (se activa sola al existir módulos)."
+          fi
+
+  # Obs-14: auditoría de vulnerabilidades sobre el lock (grupo dev + extra `portal`).
+  audit:
+    name: Auditoría de dependencias
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Instalar uv (con caché)
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      # pip-audit está en el grupo dev: versión y hashes fijados por uv.lock.
+      - name: Sincronizar dependencias
+        run: uv sync --locked
+
+      - name: Exportar requisitos desde uv.lock
+        run: uv export --locked --all-extras --no-emit-project --no-hashes --output-file "$RUNNER_TEMP/requirements-audit.txt"
+
+      # Falla (código != 0) ante cualquier vulnerabilidad conocida.
+      - name: pip-audit
+        run: uv run pip-audit --requirement "$RUNNER_TEMP/requirements-audit.txt" --disable-pip --no-deps --strict
+
+  # Integración con Chromium. Aún no hay código de portal ni pruebas en tests/integration,
+  # así que el job detecta si hay pruebas y, si no, termina en verde sin instalar el navegador.
+  # Las pruebas de integración usan fixtures HTML locales: no hay tráfico hacia la DIAN.
+  # PENDIENTE (RNF-06): añadir matriz con windows-latest cuando existan pruebas de integración.
+  integration:
+    name: Integración (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detectar pruebas de integración
+        id: detect
+        shell: bash
+        run: |
+          if find tests/integration -name 'test_*.py' 2>/dev/null | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "Sin pruebas en tests/integration: job omitido (sin instalar Chromium)."
+          fi
+
+      - name: Instalar uv (con caché)
+        if: steps.detect.outputs.found == 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Sincronizar dependencias (con extra portal)
+        if: steps.detect.outputs.found == 'true'
+        run: uv sync --locked --extra portal
+
+      - name: Instalar Chromium
+        if: steps.detect.outputs.found == 'true'
+        run: uv run playwright install --with-deps chromium
+
+      - name: Pruebas de integración (fixtures locales)
+        if: steps.detect.outputs.found == 'true'
+        run: uv run pytest tests/integration -m "not portal_real"

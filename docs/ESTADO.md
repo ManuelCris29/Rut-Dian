@@ -76,6 +76,9 @@
 - Jurídico / responsable de datos: concepto sobre reserva del RUT, art. 10 Ley 1581 y cláusula "servicios privados o con fines de lucro".
 - Negocio: incluir en formatos de vinculación la solicitud de copia del RUT (≤ 30 días) y la autorización de tratamiento.
 - Re-verificación de seguridad: APROBADO (2026-10-09); 12 observaciones corregidas.
+- T-31 BLOQUEADA (humano): crear remoto GitHub, push, rama `verif/ci-rojo` (prueba fallida + `sed` de requests==2.19.0 en el requirements exportado) → rojo en quality/audit, revertir → verde; reemplazar `<<PROPIETARIO>>` en `.github/CODEOWNERS` y activar "Require review from Code Owners".
+- Humano (opcional): ampliar `.claude/hooks/bloquear_evasion.py` con `ignore_default_args`, `add_init_script`, `extra_http_headers`, `ignore_https_errors`, `clear_cookies` (propuesta revisor-seguridad Fase 3).
+- Para T-38: `context.route` que aborte todo salvo localhost/file://; valorar cubrir `getaddrinfo` en el guard; pruebas `portal_real` con variable de opt-in explícita (revisor-seguridad).
 
 ## Bitácora
 
@@ -90,3 +93,4 @@
 - 2026-10-09 — Fase 3: correcciones aplicadas (arquitecto); re-verificación de seguridad APROBADO; 5 pendientes menores corregidos (orquestador). Fase 3 lista para gate.
 - 2026-10-09 — Gate de Fase 3 aprobado por el usuario (ADR-0001..0003 ratificados); inicia Fase 4 — Desarrollo (orquestador).
 - 2026-10-09 — T-30 HECHA: esqueleto uv/ruff/mypy/pytest, prueba de arquitectura con ast, guard de red (incl. asyncio/Proactor/UDP); 35 pruebas en verde; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones (desarrollador-python).
+- 2026-10-09 — T-31: CI (quality ubuntu+windows, coverage, audit con pip-audit fijado, integration condicionado), CODEOWNERS en borrador, .gitignore ampliado; revisores código y seguridad APROBADO CON OBSERVACIONES, aplicadas. BLOQUEADA a la espera de verificación en GitHub (ingeniero-devops).
