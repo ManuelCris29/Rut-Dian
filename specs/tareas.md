@@ -7,10 +7,10 @@ Una tarea de Fase N no inicia hasta que la Fase N-1 esté cerrada en `docs/ESTAD
 
 | ID | Tarea | Entregable | Estado |
 |---|---|---|---|
-| T-01 | Presentar preguntas de `specs/requisitos.md` al humano y registrar respuestas | requisitos.md actualizado | TODO |
-| T-02 | Definir campos de salida y finalidad del tratamiento | SPEC §5 confirmado | TODO |
-| T-03 | Medir/registrar línea base del proceso manual (o supuesto aprobado) | tabla de indicadores | TODO |
-| T-04 | Priorizar RF con MoSCoW y aprobar alcance MVP | SPEC §4 aprobado | TODO |
+| T-01 | Presentar preguntas de `specs/requisitos.md` al humano y registrar respuestas | requisitos.md actualizado | HECHA |
+| T-02 | Definir campos de salida y finalidad del tratamiento | SPEC §5 confirmado | HECHA |
+| T-03 | Medir/registrar línea base del proceso manual (o supuesto aprobado) | tabla de indicadores | HECHA (rango reportado; cronometraje de 20 consultas pendiente) |
+| T-04 | Priorizar RF con MoSCoW y aprobar alcance MVP | SPEC §4 aprobado | EN_CURSO (espera aprobación en gate) |
 
 ## Fase 2 — Viabilidad (agente: investigador-dian)
 

@@ -42,8 +42,15 @@ Característica: Consulta del estado del RUT
 
   Escenario: Exportación
     Dado un lote procesado
-    Cuando exporto a Excel y JSON
-    Entonces ambos archivos contienen las mismas filas y columnas definidas en SPEC §5
+    Cuando exporto a Excel
+    Entonces el archivo contiene una fila por identificación de entrada
+    Y las columnas definidas en SPEC §5, incluidas fuente y fecha de consulta
+
+  Escenario: Lote mixto de cédulas y NIT
+    Dado un archivo con la cédula ficticia "1000000001" y el NIT ficticio "900000001" con DV incorrecto
+    Cuando ejecuto el lote
+    Entonces la cédula se consulta
+    Y el NIT queda en "ENTRADA_INVALIDA" sin consultar la fuente
 ```
 
 ## Definición de terminado (por tarea)

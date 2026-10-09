@@ -39,7 +39,7 @@ validación documental o contingencia manual — sin reescribir el resto.
 | RF-03 | Validar formato (solo dígitos, longitud, DV si es NIT) antes de consultar | Must |
 | RF-04 | Automatizar navegación, diligenciamiento y envío en el canal oficial | Must (si Fase 2 lo aprueba) |
 | RF-05 | Extraer solo campos autorizados (ver §5) | Must |
-| RF-06 | Exportar a Excel y JSON | Must · CSV Should |
+| RF-06 | Exportar a Excel | Must · JSON/CSV Could (destino confirmado: solo Excel) |
 | RF-07 | Registro técnico por consulta: id de ejecución, id enmascarado, estado, inicio, duración, error | Must |
 | RF-08 | Manejo de excepciones con estados identificables (`specs/excepciones.md`) | Must |
 | RF-09 | Reintentos controlados con backoff solo para errores transitorios | Must |
@@ -47,13 +47,22 @@ validación documental o contingencia manual — sin reescribir el resto.
 | RF-11 | Evitar consultas duplicadas dentro del mismo lote | Should |
 | RF-12 | Modo contingencia: genera registro "pendiente de validación manual" cuando el canal no está disponible | Must |
 | RF-13 | Interfaz gráfica | Won't (MVP) — CLI + archivos |
+| RF-14 | Revalidación periódica de la base de terceros | Could (post-MVP; periodicidad RN-04 pendiente) |
+
+**Contexto confirmado (2026-10-09):** 100–500 consultas/mes, frecuencia mixta, modo asistido aceptado,
+sin presupuesto para proveedor comercial y sin convenio con la DIAN → la fuente objetivo es el portal
+público "Consulta Estado RUT". Detalle en `specs/requisitos.md`.
 
 ## 5. Datos
 
-**Entrada:** número de identificación (obligatorio), tipo [PENDIENTE: ¿cédula, NIT o ambos?].
-**Salida candidata** [PENDIENTE: confirmar con negocio y con lo que muestre el canal real]:
+**Entrada:** número de identificación (obligatorio): cédula o NIT [CONFIRMADO]; el NIT puede traer DV.
+**Salida** [CONFIRMADO con negocio; nombres finales de campo sujetos a lo que muestre el canal real en Fase 2]:
 `identificacion`, `dv`, `nombre_o_razon_social`, `estado_rut`, `fecha_consulta`, `fuente`, `estado_consulta`, `observacion`.
 No se extraen campos adicionales aunque sean visibles.
+
+**Finalidad del tratamiento (Ley 1581/2012)** [CONFIRMADO]: verificar el estado tributario (RUT) de
+proveedores, contratistas, clientes y empleados durante su vinculación y para su revalidación periódica.
+**Retención:** 1 año; luego se eliminan los resultados.
 
 ## 6. Requisitos no funcionales
 
