@@ -1,15 +1,15 @@
 # Estado del proyecto
 
-**Fase actual:** 1 — Levantamiento de requisitos
-**Estado de la fase:** LISTA_PARA_GATE (espera aprobación humana)
+**Fase actual:** 2 — Viabilidad
+**Estado de la fase:** EN_CURSO
 **Última actualización:** 2026-10-09
 
 ## Gates de fase
 
 | Fase | Estado | Aprobado por | Fecha |
 |---|---|---|---|
-| 1. Requisitos | LISTA_PARA_GATE | — | — |
-| 2. Viabilidad | PENDIENTE | — | — |
+| 1. Requisitos | APROBADA | usuario | 2026-10-09 |
+| 2. Viabilidad | EN_CURSO | — | — |
 | 3. Diseño | PENDIENTE | — | — |
 | 4. Desarrollo | PENDIENTE | — | — |
 | 5. Pruebas | PENDIENTE | — | — |
@@ -27,6 +27,7 @@
 | 2026-10-09 | Salida MVP: solo Excel; JSON/CSV pasan a Could | SPEC RF-06 |
 | 2026-10-09 | Finalidad: vinculación/verificación de proveedores, contratistas, clientes y empleados; retención 1 año | SPEC §5, RN-06 |
 | 2026-10-09 | Información exógena fuera de alcance | requisitos.md |
+| 2026-10-09 | Gate Fase 1 aprobado; supuestos de Fase 1 (lote ≤ 200, MVP bajo demanda, visibilidad, RN-01/02/05/07) aprobados por el usuario | /cerrar-fase |
 
 ## Supuestos activos
 
@@ -55,3 +56,4 @@
 - 2026-10-09 — Andamiaje de agentes, skills, comandos, hooks y specs creado.
 - 2026-10-09 — Repositorio git inicializado; primer commit del andamiaje (orquestador).
 - 2026-10-09 — Fase 1 ronda 1: 12 preguntas respondidas; requisitos.md, SPEC §4–§5, criterios y tareas actualizados (orquestador en rol analista-requisitos).
+- 2026-10-09 — Gate de Fase 1 aprobado por el usuario; inicia Fase 2 — Viabilidad (orquestador).
