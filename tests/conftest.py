@@ -27,6 +27,7 @@ from collections.abc import Callable, Iterator
 from typing import Any, NoReturn
 
 import pytest
+from typer import rich_utils
 
 from rut_checker.infra.settings import Settings
 
@@ -160,3 +161,20 @@ def _isolate_settings_from_real_env() -> Iterator[None]:
                 patch.delenv(name)
         yield
     Settings.model_config["env_file"] = previous
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _plain_terminal_output() -> Iterator[None]:
+    """Las pruebas de CLI ven siempre texto plano, sin códigos ANSI ni cajas de Rich.
+
+    En CI (`GITHUB_ACTIONS`, `FORCE_COLOR`, `PY_COLORS`) Typer fuerza una terminal con color y
+    parte opciones como `--confirmar` con secuencias ANSI. `typer.rich_utils.FORCE_TERMINAL` se
+    calcula al importar el módulo, por lo que además del entorno se fija esa constante.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        for name in ("GITHUB_ACTIONS", "FORCE_COLOR", "PY_COLORS", "CLICOLOR_FORCE"):
+            patch.delenv(name, raising=False)
+        patch.setenv("NO_COLOR", "1")
+        patch.setenv("TERM", "dumb")
+        patch.setattr(rich_utils, "FORCE_TERMINAL", False)
+        yield
