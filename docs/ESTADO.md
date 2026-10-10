@@ -47,6 +47,8 @@
 - SUPUESTO: MVP solo bajo demanda; la periodicidad de revalidación (RN-04) se define en Fase 3.
 - SUPUESTO: pueden ver los resultados el área solicitante y el operador.
 - SUPUESTO: línea base > 3 min/consulta → > 5–25 h operador/mes; se confirma cronometrando 20 consultas.
+- SUPUESTO: longitudes válidas 3–10 dígitos (cédula 3–10, NIT 9–10 sin DV); ceros iniciales se conservan (afecta dedupe: "01234567" ≠ 1234567). Confirmar con negocio.
+- SUPUESTO (P-4): sin columna de tipo ni guion, un número de 10 dígitos se toma como identificación sin DV; un NIT con DV pegado sin guion no se distingue de una cédula de 10 dígitos.
 
 ## Riesgos
 
@@ -101,3 +103,4 @@
 - 2026-10-09 — T-32 HECHA: QueryStatus (incl. VALIDADA_COPIA_RUT), SourceKind, excepciones sin mensaje libre, enmascarado (≤ 6 caracteres → todo *; ≥ 7 → últimos 4; regex sin \s); 86 pruebas; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones (desarrollador-python).
 - 2026-10-09 — T-33 HECHA: Settings (pydantic-settings, valores seguros, triple llave: APPROVAL_REF con fecha real, URL https solo *.dian.gov.co:443 sin userinfo ni \, backoff ≥ 3 y ≥ max_retries), .env.example, aislamiento del .env real en pruebas; 157 pruebas; revisor-codigo APROBADO CON OBSERVACIONES; revisor-seguridad BLOQUEANTE (evasión de URL con \) → corregido → APROBADO CON OBSERVACIONES (desarrollador-python).
 - 2026-10-09 — T-42 HECHA: modelos de dominio frozen (InputRow, IdentificationInput, CopyEvidence, RutResult con invariantes estado↔fuente, QueryOutcome), regla de copia ≤ 30 días con CopyVerdict VALID/EXPIRED/FUTURE_DATE, errores de dominio en validadores before, repr enmascarado; 246 pruebas; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones. Deuda: model_dump expone datos reales → no volcar modelos a logs (T-43) (desarrollador-python).
+- 2026-10-09 — T-41 HECHA: validadores (normalización con agrupación de miles válida y decimal nulo .0/,00; sin espacios mezclados con . o ,; guiones Unicode; DV con stdnum solo si llega; todo-ceros rechazado; firma sin row_index); 396 pruebas; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones (2 hallazgos de identificación equivocada silenciosa corregidos). Deuda: regex _DIGITS duplicadas en models/validators (desarrollador-python).

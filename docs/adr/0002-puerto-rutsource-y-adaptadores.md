@@ -47,8 +47,8 @@ class RutSourcePort(Protocol):
         """Libera recursos (navegador). Idempotente."""
 ```
 
-- `IdentificationInput` (dominio, inmutable): `row_index`, `number` (normalizado), `dv: str | None`,
-  `copy_evidence: CopyEvidence | None`. Entrada = solo el número; DV opcional (P-4, [CONFIRMADO]).
+- `IdentificationInput` (dominio, inmutable): `identification` (normalizado, solo dígitos, sin DV), `dv: str | None`,
+  `copy_evidence: CopyEvidence | None`, `note: str | None`. No lleva `row_index` (vive en `InputRow`). Entrada = solo el número; DV opcional (P-4, [CONFIRMADO]).
 - `CopyEvidence` (dominio): `document_date: date`, `responsible: str`, `note: str | None`.
   - `responsible` es un **código o usuario** (patrón `^[A-Za-z0-9._-]{2,40}$`, p. ej. `USR-001`), **no** un
     nombre completo (observación 8).
