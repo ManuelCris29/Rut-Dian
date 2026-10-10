@@ -431,3 +431,31 @@ def test_close_logging_restores_warnings_when_last_run(tmp_path: Path) -> None:
     assert _capturing_warnings()
     close_logging(second)
     assert not _capturing_warnings()
+
+
+def test_purge_counts_are_a_closed_whitelist(logger: logging.Logger, tmp_path: Path) -> None:
+    counts = {
+        "output.resultado": 2,
+        "logs.log": 1,
+        "deleted": 3,
+        "failed": 0,
+        "resultado_20250101-100000-abcd.xlsx": 1,  # texto libre: se descarta
+        "PERSONA FICTICIA UNO": 1,
+        "data.otro": True,  # bool no es entero
+        "logs.snapshot": "4",
+    }
+    logger.info("x", extra={"event": LogEvent.PURGE_EXECUTED, "purge_counts": counts})
+    event = _events(tmp_path)[0]
+    assert event["event"] == "purge_executed"
+    assert event["purge_counts"] == {
+        "output.resultado": 2,
+        "logs.log": 1,
+        "deleted": 3,
+        "failed": 0,
+    }
+    assert "FICTICIA" not in _raw(tmp_path)
+
+
+def test_purge_counts_not_a_dict_is_dropped(logger: logging.Logger, tmp_path: Path) -> None:
+    logger.info("x", extra={"event": LogEvent.PURGE_EXECUTED, "purge_counts": "texto libre"})
+    assert "purge_counts" not in _events(tmp_path)[0]

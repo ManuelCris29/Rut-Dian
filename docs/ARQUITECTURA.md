@@ -280,7 +280,7 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 |---|---|---|
 | `rut-checker lote <archivo> [--salida DIR]` | Procesa el lote y escribe el Excel | 0 completo · 1 lote detenido · 2 error de entrada/config · 3 error de exportación |
 | `rut-checker consultar [--dv D] [--fecha-copia AAAA-MM-DD --responsable USR]` | Lote de 1 fila. El número se pide por **prompt** si no se pasa como argumento (evita el historial de PowerShell, Obs-11); imprime resumen con id enmascarado y escribe el Excel. Sin número y sin terminal interactiva: código 2. Con el número como argumento avisa que quedó en el historial. Una fila `ENTRADA_INVALIDA` da código 2 (el Excel se conserva) | igual |
-| `rut-checker purgar [--confirmar] [--fuente PORTAL_DIAN_C1]` | Lista (o elimina con `--confirmar`) lo vencido en `data/`, `output/`, `logs/` | 0 / 2 |
+| `rut-checker purgar [--confirmar] [--fuente PORTAL_DIAN_C1]` | Lista (o elimina con `--confirmar`) lo vencido en `data/`, `output/`, `logs/` | 0 ok · 1 purga parcial (algún archivo no se pudo eliminar) · 2 configuración/ruta |
 
 - `--salida` debe resolverse **dentro de** `RUT_OUTPUT_DIR`; si no → código 2. `RUT_OUTPUT_DIR`,
   `RUT_LOG_DIR` y `RUT_DATA_DIR` se rechazan si quedan dentro de un árbol git, **salvo** las carpetas
@@ -567,6 +567,14 @@ El `.env` se lee desde el directorio de trabajo (cwd); la CLI avisa por stderr q
   365 días para datos, resultados y logs, 30 días para snapshots. `--fuente PORTAL_DIAN_C1` purga solo
   ejecuciones cuya fuente fue el portal (se lee del evento `run_started`), para el caso de respuesta
   contraria de la DIAN (INFORME §9). Evento `purge_executed` con conteos.
+  Detalle (T-44): solo nombres exactos generados por la herramienta (`resultado_<id>[_1].xlsx|.json`,
+  `run_<id>.jsonl`, `snapshot_<id>_<n>.html`, `.resultado_<id>[_1].tmp.*`); un `run_id` futuro (> ahora + 1
+  día) no se usa; sin `run_id`, la fecha es la más reciente entre mtime, ctime y birthtime. Con `--fuente`
+  se ignora la edad, se excluye `data/`, se omiten archivos modificados hace < 10 min y los archivos sin log
+  de fuente legible no se borran: se cuentan como `unknown_source` y se avisa para revisión manual. Sin
+  `--confirmar` solo se muestran conteos `carpeta.tipo` (nunca nombres). El evento `purge_executed` va en un
+  log de mantenimiento nuevo con `purge_counts` (claves cerradas `<carpeta>.<tipo>`, `deleted`, `failed`,
+  `unknown_source`; enteros). Borrado parcial → código 1. Aviso si `RUT_RETENTION_DAYS` < 365 (RN-06).
 - **Ubicaciones (Obs-4):** entradas en `data/`, salidas en `output/`, logs en `logs/`. La guía de
   instalación (T-60) exige carpeta local **no sincronizada** (OneDrive/Drive), ACL NTFS restringida al
   operador, canal de entrega restringido del Excel al área solicitante, y documenta el riesgo del id en el

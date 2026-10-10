@@ -1,6 +1,7 @@
 """CLI de `rut-checker` (ARQUITECTURA §6) y cableado manual de dependencias (`build_service`).
 
-Comandos: `lote <archivo> [--salida DIR]` y `consultar [NUMERO] [--dv ...]`. Códigos de salida:
+Comandos: `lote <archivo> [--salida DIR]`, `consultar [NUMERO] [--dv ...]` y `purgar`
+(lógica en `cli_purge.py`). Códigos de salida:
 0 completo, 1 lote detenido (o fallo inesperado), 2 entrada/configuración/ruta, 3 exportación.
 
 Decisiones:
@@ -30,6 +31,7 @@ from rut_checker.application.batch_service import BatchQueryService
 from rut_checker.application.clock import SystemClock, SystemSleeper
 from rut_checker.application.report import BatchReport
 from rut_checker.application.retry_policy import BackoffRetryPolicy
+from rut_checker.cli_purge import run_purge
 from rut_checker.cli_support import (
     EXIT_INPUT,
     EXIT_STOPPED,
@@ -51,6 +53,7 @@ from rut_checker.cli_support import (
 )
 from rut_checker.domain.errors import ExportError, FakeNotAllowedError
 from rut_checker.domain.models import InputRow
+from rut_checker.domain.status import SourceKind
 from rut_checker.infra.logging import (
     close_run_logging,
     configure_logging,
@@ -274,3 +277,19 @@ def consultar(
             raw_responsible=responsible,
         )
         raise typer.Exit(_run([row], settings, None, single=True))
+
+
+@app.command(cls=SafeCommand)
+def purgar(
+    confirm: Annotated[
+        bool, typer.Option("--confirmar", help="Elimina; sin esta opción solo lista conteos.")
+    ] = False,
+    source: Annotated[
+        SourceKind | None,
+        typer.Option("--fuente", help="Solo ejecuciones de esa fuente (p. ej. PORTAL_DIAN_C1)."),
+    ] = None,
+) -> None:
+    """Lista (o elimina con --confirmar) los archivos vencidos de data/, output/ y logs/."""
+    with handled_errors():
+        settings = load_settings()
+        raise typer.Exit(run_purge(settings, SystemClock(), confirm=confirm, source=source))

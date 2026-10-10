@@ -14,6 +14,8 @@ Garantías:
   `error_code` y `error_class` (ver `log_exception`).
 - `id_masked` debe llegar ya enmascarado con `mask_identification`; si llega un número sin
   enmascarar se enmascara de nuevo, y cualquier otro contenido se descarta.
+- `purge_counts` (evento `purge_executed`): solo claves `<carpeta>.<tipo>`, `deleted` y `failed`
+  de un conjunto cerrado (`purge_keys.COUNT_KEYS`) con enteros; no admite texto libre.
 - Los campos estructurados (`ts`, `started_at`, `run_id`, contadores) no pasan por el enmascarado.
 - `configure_logging` silencia `rut_checker` y `py.warnings` (NullHandler, sin propagación).
 - `silence_unconfigured_loggers` (CLI) pone un `NullHandler` en el root: un logger de terceros
@@ -23,9 +25,11 @@ Garantías:
 import logging
 import os
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Final
 
+from rut_checker.domain.status import SourceKind
 from rut_checker.infra.log_format import (
     ERROR_CODE,
     JsonlFormatter,
@@ -43,6 +47,7 @@ __all__ = [
     "configure_logging",
     "log_exception",
     "log_export_failed",
+    "log_purge_executed",
     "silence_unconfigured_loggers",
 ]
 
@@ -193,6 +198,24 @@ def log_export_failed(logger: logging.Logger, error_code: str, error_class: str)
             "event": LogEvent.EXPORT_FAILED,
             "error_code": error_code,
             "error_class": error_class,
+        },
+    )
+
+
+def log_purge_executed(
+    logger: logging.Logger, purge_counts: Mapping[str, int], source: SourceKind | None = None
+) -> None:
+    """Registra `purge_executed` con conteos por `<carpeta>.<tipo>` (claves cerradas) y totales.
+
+    Los conteos con claves fuera de `purge_keys.COUNT_KEYS` se descartan; nunca se registran
+    rutas ni nombres de archivo.
+    """
+    logger.info(
+        LogEvent.PURGE_EXECUTED.value,
+        extra={
+            "event": LogEvent.PURGE_EXECUTED,
+            "purge_counts": dict(purge_counts),
+            "source": source,
         },
     )
 

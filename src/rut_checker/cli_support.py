@@ -157,7 +157,9 @@ def announce_environment(settings: Settings, clock: Clock) -> None:
                 f"AVISO: {name} parece estar en una carpeta que se sincroniza con la nube; "
                 "use una carpeta local no sincronizada."
             )
-    expired = find_expired(list(folders.values()), clock.now(), settings.retention_days)
+    expired = find_expired(
+        list(folders.values()), clock.now(), max_age_days=settings.retention_days
+    )
     if expired:
         echo_err(
             f"Hay {len(expired)} archivos con más de {settings.retention_days} días: "

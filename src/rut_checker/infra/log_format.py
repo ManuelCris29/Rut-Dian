@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 from rut_checker.domain.masking import mask_digit_runs, mask_identification
 from rut_checker.domain.status import QueryStatus, SourceKind
+from rut_checker.infra.purge_keys import COUNT_KEYS
 
 ERROR_CODE: Final = re.compile(r"[A-Z_]{1,40}", re.ASCII)
 _ERROR_CLASS: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}", re.ASCII)
@@ -118,6 +119,18 @@ def _counts(value: object) -> dict[str, int]:
     return result
 
 
+def _purge_counts(value: object) -> dict[str, int]:
+    """Conteos de purga: solo claves del conjunto cerrado `COUNT_KEYS` y enteros estrictos."""
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, int] = {}
+    for key, count in value.items():
+        number = _plain_int(count)
+        if isinstance(key, str) and key in COUNT_KEYS and number is not None:
+            result[key] = number
+    return result
+
+
 def _optional_fields(record: logging.LogRecord) -> dict[str, object]:
     """Campos opcionales permitidos, validados por tipo; lo que no cumple se descarta."""
     fields: dict[str, object] = {
@@ -141,6 +154,9 @@ def _optional_fields(record: logging.LogRecord) -> dict[str, object]:
     raw_counts = getattr(record, "counts", None)
     if isinstance(raw_counts, dict):
         fields["counts"] = _counts(raw_counts)
+    purge_counts = _purge_counts(getattr(record, "purge_counts", None))
+    if purge_counts:
+        fields["purge_counts"] = purge_counts
     return {key: value for key, value in fields.items() if value is not None}
 
 
