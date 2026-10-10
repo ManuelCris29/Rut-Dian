@@ -1,0 +1,23 @@
+# SINTÉTICO — no representa el portal de la DIAN
+# Selectores de MECANISMO para pruebas (ADR-0003, D-4). El cargador de producción
+# (`load_selectors`) rechaza siempre este archivo: `synthetic: true`, referencia de aprobación
+# reservada y snapshot inexistente. Solo lo usa `enabled_portal_from_synthetic_fixture`.
+synthetic: true
+validated: true
+version: "sintetico-1"
+approval_ref: "APR-19700101-0"
+source_snapshot: "docs/investigacion/SINTETICO-no-existe.md"
+form:
+  id_input: { strategy: testid, value: "campo-id-sintetico" }
+  submit_button: { strategy: testid, value: "boton-enviar-sintetico" }
+result:
+  status: { strategy: testid, value: "estado-sintetico" }
+  name: { strategy: testid, value: "nombre-sintetico", required: false }
+  no_result_msg: { strategy: testid, value: "sin-resultado-sintetico" }
+detection:
+  maintenance_url_markers: ["mantenimiento-sintetico"]
+  challenge_markers:
+    - { strategy: testid, value: "desafio-sintetico" }
+  block_markers: []
+  block_observed: none
+  block_evidence: "sintético: sin página de bloqueo en el mecanismo de prueba"

@@ -1,0 +1,29 @@
+# Selectores del portal "Consulta Estado RUT" (DIAN).
+#
+# ESTADO: SIN VALIDAR. Todo valor es el marcador PENDIENTE hasta que exista un snapshot real
+# documentado en docs/investigacion/ (tarea T-14, hoy BLOQUEADA). No inventar valores: cada
+# selector debe salir de ese snapshot. Con `validated: false` el portal NO se puede habilitar
+# (llave 3 de ADR-0002 §3).
+#
+# Para validar: un humano completa los valores desde el snapshot, fija `approval_ref` igual a
+# RUT_PORTAL_APPROVAL_REF, `source_snapshot` (ruta relativa en docs/investigacion/) y
+# `validated: true`. Si no se observó desafío o bloqueo, usar `challenge_observed: none` /
+# `block_observed: none` junto con `*_evidence` citando el snapshot.
+# Estrategias admitidas: label, role (usa `role` y `name`), text, css, testid.
+# Cambios de este archivo requieren revisión humana (CODEOWNERS, T-31).
+synthetic: false
+validated: false
+version: "PENDIENTE"
+approval_ref: ""
+source_snapshot: ""
+form:
+  id_input: { strategy: label, value: "PENDIENTE" }
+  submit_button: { strategy: role, role: "PENDIENTE", name: "PENDIENTE" }
+result:
+  status: { strategy: css, value: "PENDIENTE" }
+  name: { strategy: css, value: "PENDIENTE", required: false }
+  no_result_msg: { strategy: text, value: "PENDIENTE" }
+detection:
+  maintenance_url_markers: ["PENDIENTE"]
+  challenge_markers: []
+  block_markers: []

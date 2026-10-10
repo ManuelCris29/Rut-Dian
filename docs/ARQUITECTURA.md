@@ -502,6 +502,26 @@ Constantes no configurables: 2 bloqueos seguidos detienen el lote; 3 `TIEMPO_AGO
 circuito; copia ≤ 30 días; retención de snapshots 30 días; zona `America/Bogota`.
 `.env` real nunca se lee ni versiona; la CI no define variables `RUT_*` reales.
 
+**Llave 3 y puerta única (T-37, `adapters/dian_portal/selectors.py`).**
+- La raíz del proyecto se ancla al paquete (`pyproject.toml` con `name = "rut-checker"` encontrado desde
+  `__file__`), no al archivo pedido. Solo se acepta `<raíz>/config/selectors.yaml` tras `resolve()`, sin
+  enlaces simbólicos ni junctions; `RUT_SELECTORS_PATH` que no resuelva exactamente ahí (incluida una ruta
+  relativa evaluada desde otro cwd) falla con `OUTSIDE_PROJECT`. El snapshot de `source_snapshot` se busca bajo
+  esa raíz. Si el paquete corre fuera de un árbol de proyecto (p. ej. instalado en `site-packages`), el portal
+  no se puede habilitar (`OUTSIDE_PROJECT`): la habilitación exige ejecutar desde el repositorio.
+- `yaml` se lee con un `SafeLoader` derivado que rechaza claves duplicadas, anclas y alias; la referencia
+  `APR-19700101-0` y `synthetic: true` están reservadas a fixtures y la producción las rechaza.
+- En `form.*` y `result.*` se rechazan (NFKC, sin mayúsculas) valores, roles o nombres con `turnstile`,
+  `challenges.cloudflare`, `cf-chl`, `captcha`, `recaptcha` o `hcaptcha` (`FORBIDDEN_TARGET`); solo
+  `detection.challenge_markers` puede nombrar el desafío.
+- `ensure_portal_enabled(settings) -> EnabledPortal` es la **puerta única**: `EnabledPortal` (inmutable, con
+  token privado) envuelve los `PortalSelectors` verificados y `DianPortalSource` (T-49) acepta solo ese tipo.
+  La vía de pruebas con selectores sintéticos es explícita (`enabled_portal_from_synthetic_fixture`, limitada a
+  `tests/fixtures/`, marca `synthetic=True`) y `build_service` no puede usarla: una prueba verifica que ningún
+  otro módulo de `src/` la referencia, ni a `_load_validated`/`_ensure_enabled` (raíz inyectada, solo pruebas).
+- El navegador del adaptador (T-48/T-49) fija `headless=False` **en código**, no desde configuración;
+  `ensure_portal_enabled` además rechaza `RUT_HEADLESS=true`.
+
 ## 10. Logging, auditoría y diagnóstico (RF-07, RNF-01)
 
 - Un archivo por ejecución: `logs/run_<run_id>.jsonl` (stdlib `logging` + formateador JSON).

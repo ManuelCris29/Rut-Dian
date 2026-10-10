@@ -92,6 +92,7 @@ un doble programable.
 | Abrir **página nueva** solo ante `SessionExpired` (único caso) | `new_context` fuera del inicio del lote |
 
 Navegador: `chromium.launch(headless=False)` obligatorio cuando `RUT_SOURCE=dian_portal`.
+El adaptador (T-48/T-49) fija `headless=False` en código; no lo toma de `RUT_HEADLESS` (que además `ensure_portal_enabled` exige en `false`).
 
 **Prueba de arquitectura** (`ast`, T-30 crea la base y T-49 la extiende): falla si en
 `src/rut_checker/adapters/dian_portal/` aparecen `user_agent`, `proxy`, `args`, `ignore_default_args`,

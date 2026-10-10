@@ -104,6 +104,33 @@ def test_only_dian_portal_package_imports_playwright() -> None:
     assert not offenders, f"solo adapters/dian_portal puede importar playwright: {offenders}"
 
 
+def test_only_dian_portal_package_imports_yaml() -> None:
+    """pyyaml es del extra `portal`: nada fuera de adapters/dian_portal puede importarlo."""
+    allowed = SRC / "adapters" / "dian_portal"
+    offenders = [
+        str(path.relative_to(SRC))
+        for path in SRC.rglob("*.py")
+        if allowed not in path.parents and _matches_any(_file_imports(path), {"yaml"})
+    ]
+    assert not offenders, f"solo adapters/dian_portal puede importar yaml: {offenders}"
+
+
+def _imports_pyyaml(node: ast.stmt) -> bool:
+    if isinstance(node, ast.Import):
+        return any(alias.name.split(".")[0] == "yaml" for alias in node.names)
+    return isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == "yaml"
+
+
+def test_dian_portal_modules_import_yaml_lazily() -> None:
+    """Los módulos se importan sin pyyaml: ningún import de yaml a nivel de módulo."""
+    for path in (SRC / "adapters" / "dian_portal").glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        assert not any(
+            isinstance(node, ast.Import | ast.ImportFrom) and _imports_pyyaml(node)
+            for node in tree.body
+        ), path.name
+
+
 def _matches_any(modules: set[str], prefixes: set[str]) -> bool:
     return any(_matches(m, prefixes) for m in modules)
 

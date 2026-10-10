@@ -158,16 +158,78 @@ class ExportError(RutCheckerError):
     default_message = "No se pudo exportar el resultado"
 
 
+class SourceNotEnabledReason(StrEnum):
+    """Conjunto cerrado de motivos por los que el portal no está habilitado (llaves 1 y 2)."""
+
+    FLAG_DISABLED = "la fuente dian_portal está deshabilitada"
+    MISSING_APPROVAL_REF = "falta una referencia de aprobación válida"
+    INVALID_URL = "la URL del portal no es válida"
+    HEADLESS_NOT_ALLOWED = "el navegador del portal debe ser visible"
+
+
 class SourceNotEnabledError(RutCheckerError):
-    """La fuente solicitada no está habilitada por configuración."""
+    """La fuente solicitada no está habilitada por configuración.
+
+    Sin motivo (`reason=None`) usa el mensaje genérico; con motivo, lo añade sin valores de
+    configuración.
+    """
 
     default_message = "La fuente solicitada no está habilitada"
 
+    def __init__(self, reason: SourceNotEnabledReason | None = None) -> None:
+        if reason is not None and not isinstance(reason, SourceNotEnabledReason):
+            raise TypeError("motivo de fuente no habilitada fuera del conjunto cerrado")
+        self.reason = reason
+        super().__init__()
+
+    def _message(self) -> str:
+        if self.reason is None:
+            return self.default_message
+        return f"{self.default_message}: {self.reason.value}"
+
+
+class SelectorsReason(StrEnum):
+    """Conjunto cerrado de motivos por los que `selectors.yaml` no habilita el portal (llave 3)."""
+
+    YAML_UNAVAILABLE = "falta el componente opcional del portal"
+    UNREADABLE = "archivo de selectores ilegible"
+    TOO_LARGE = "archivo de selectores demasiado grande"
+    INVALID_YAML = "YAML inválido"
+    INVALID_STRUCTURE = "estructura de selectores inválida"
+    OUTSIDE_PROJECT = "archivo de selectores fuera del proyecto"
+    DUPLICATE_KEY = "clave duplicada en el YAML"
+    FORBIDDEN_TARGET = "un selector del formulario o resultado apunta al desafío"
+    INVALID_APPROVAL_REF = "la referencia de aprobación esperada no es válida"
+    SYNTHETIC = "archivo de selectores sintético"
+    NOT_SYNTHETIC = "el archivo no es sintético"
+    NOT_VALIDATED = "selectores sin validar"
+    APPROVAL_MISMATCH = "la referencia de aprobación no coincide"
+    SNAPSHOT_MISSING = "falta la referencia al snapshot documentado"
+    PLACEHOLDER = "quedan marcadores de posición pendientes"
+    MAINTENANCE_MARKERS_EMPTY = "faltan marcadores de mantenimiento"
+    CHALLENGE_MARKERS_MISSING = "faltan marcadores de desafío o su evidencia"
+    BLOCK_MARKERS_MISSING = "faltan marcadores de bloqueo o su evidencia"
+
 
 class SelectorsNotValidatedError(RutCheckerError):
-    """Los selectores del portal no han sido validados contra un snapshot real."""
+    """Los selectores del portal no han sido validados contra un snapshot real.
+
+    Sin motivo usa el mensaje genérico; el motivo es de un conjunto cerrado (sin rutas ni valores
+    del YAML).
+    """
 
     default_message = "Los selectores del portal no están validados"
+
+    def __init__(self, reason: SelectorsReason | None = None) -> None:
+        if reason is not None and not isinstance(reason, SelectorsReason):
+            raise TypeError("motivo de selectores fuera del conjunto cerrado")
+        self.reason = reason
+        super().__init__()
+
+    def _message(self) -> str:
+        if self.reason is None:
+            return self.default_message
+        return f"{self.default_message}: {self.reason.value}"
 
 
 class FakeNotAllowedError(RutCheckerError):
