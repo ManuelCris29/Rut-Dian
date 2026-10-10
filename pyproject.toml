@@ -62,6 +62,7 @@ addopts = "-m 'not portal_real' -q --strict-markers -p pytester"
 xfail_strict = true
 markers = ["portal_real: requiere el portal real de la DIAN; solo manual con aprobación"]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 
 # Cobertura (RNF-05): umbral 85 % sobre domain y application. Aún no hay código en esas capas
 # (T-30 solo crea el esqueleto), así que no se fuerza en addopts; se activa con

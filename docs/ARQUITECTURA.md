@@ -99,7 +99,7 @@ flowchart TB
 | `application/clock.py` | `Clock` y `Sleeper` inyectables (pruebas sin espera real) | RNF-05 |
 | `adapters/contingency_source.py` | Fila pendiente de validación manual | RF-12 (F) |
 | `adapters/document_copy_source.py` | Registro de metadatos de la copia | RN-07 (C) |
-| `adapters/fake_source.py` | Fuente programable para pruebas (exige `RUT_ALLOW_FAKE`) | RNF-05 |
+| `adapters/fake_source.py` | Fuente programable para pruebas (`build_service` exige `RUT_ALLOW_FAKE`; el adaptador no lo comprueba) | RNF-05 |
 | `adapters/console_operator.py` | Avisos y confirmaciones en terminal | RF-10 |
 | `adapters/dian_portal/*` | RPA asistido (E), deshabilitado | RF-04, RF-05, RF-10, RNF-03, RNF-07 |
 | `io/readers.py` | Leer `.xlsx` y `.csv` desde `data/` | RF-01, RF-02 |
