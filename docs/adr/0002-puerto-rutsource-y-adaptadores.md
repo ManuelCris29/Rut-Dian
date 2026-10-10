@@ -49,11 +49,12 @@ class RutSourcePort(Protocol):
 
 - `IdentificationInput` (dominio, inmutable): `identification` (normalizado, solo dígitos, sin DV), `dv: str | None`,
   `copy_evidence: CopyEvidence | None`, `note: str | None`. No lleva `row_index` (vive en `InputRow`). Entrada = solo el número; DV opcional (P-4, [CONFIRMADO]).
-- `CopyEvidence` (dominio): `document_date: date`, `responsible: str`, `note: str | None`.
+- `CopyEvidence` (dominio): `copy_date: date`, `responsible: str`.
   - `responsible` es un **código o usuario** (patrón `^[A-Za-z0-9._-]{2,40}$`, p. ej. `USR-001`), **no** un
     nombre completo (observación 8).
-  - `note` es texto libre de longitud máxima 200; se neutraliza al exportar (ARQUITECTURA §5.3) y
-    **nunca** se escribe en el log (prueba en T-43).
+- `IdentificationInput.note` es texto libre de longitud máxima 200 (observación del área); se neutraliza al
+  exportar (ARQUITECTURA §5.3) y **nunca** se escribe en el log (prueba en T-43).
+- `RutSourcePort.kind` identifica al adaptador; la columna `fuente` sale **siempre** de `RutResult.source`.
 - `RutResult` (dominio): `status ∈ {EXITOSA, SIN_RESULTADOS, PENDIENTE_VALIDACION_MANUAL,
   VALIDADA_COPIA_RUT}`, `source: SourceKind`, `estado_rut: str | None`, `name: str | None`,
   `dv: str | None`, `observation: str | None`. Validadores de modelo:
@@ -72,7 +73,7 @@ class RutSourcePort(Protocol):
 | Adaptador | Archivo | `kind` | `paced` | Comportamiento | Requisito |
 |---|---|---|---|---|---|
 | `ContingencySource` | `adapters/contingency_source.py` | `CONTINGENCIA_MANUAL` | No | Siempre `PENDIENTE_VALIDACION_MANUAL`, observación "Pendiente de validación manual" (+ motivo que pase el servicio) | RF-12, F |
-| `DocumentCopySource` | `adapters/document_copy_source.py` | `COPIA_RUT_TERCERO` | No | Si `copy_evidence` es `None` → delega en `ContingencySource`. Si existe → regla de dominio `evaluate_copy_evidence(evidence, today)`: ≤ 30 días → **`VALIDADA_COPIA_RUT`** con observación "Validado contra copia del RUT de fecha AAAA-MM-DD; responsable: <código>"; > 30 días → `PENDIENTE_VALIDACION_MANUAL` "copia vencida (AAAA-MM-DD)"; fecha futura → `PENDIENTE_VALIDACION_MANUAL` "fecha de copia inválida". `estado_rut` y `nombre_o_razon_social` quedan **vacíos** (D-3) | RN-07, C |
+| `DocumentCopySource` | `adapters/document_copy_source.py` | `COPIA_RUT_TERCERO` | No | Si `copy_evidence` es `None` → delega en `ContingencySource`. Si existe → regla de dominio `evaluate_copy_evidence(evidence, today)`: ≤ 30 días → **`VALIDADA_COPIA_RUT`** con observación "Validado contra copia del RUT de fecha AAAA-MM-DD; responsable: <código>"; > 30 días → `PENDIENTE_VALIDACION_MANUAL` "copia vencida (AAAA-MM-DD)"; fecha futura → `PENDIENTE_VALIDACION_MANUAL` "fecha de copia inválida" (ambos con `RutResult.source = CONTINGENCIA_MANUAL`, sin invocar el fallback; la observación del área se conserva en todos los casos, con espacios colapsados y números largos enmascarados). `paced` sigue al fallback. `estado_rut` y `nombre_o_razon_social` quedan **vacíos** (D-3) | RN-07, C |
 | `DianPortalSource` | `adapters/dian_portal/` | `PORTAL_DIAN_C1` | **Sí** | Playwright, API síncrona, navegador visible, un `BrowserContext` por lote. Orden de detección y modo asistido en ADR-0003. **Falla de forma segura** (§3). Acepta `base_url` para apuntar a un servidor local en pruebas | RF-04, RF-05, RF-10, RNF-07, E |
 | `FakeSource` | `adapters/fake_source.py` | `FAKE` | No | Respuestas programables por número (resultado o excepción) y contador de llamadas, para pruebas y demos | RNF-05 |
 | `ConsoleOperator` | `adapters/console_operator.py` | — | — | Implementa `OperatorPort` (ADR-0003) con `typer.echo`/`typer.confirm` | RF-10 |

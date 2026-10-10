@@ -96,7 +96,7 @@ flowchart TB
 | `domain/masking.py` | `mask_identification()`, `mask_digit_runs()` | RNF-01 |
 | `ports/rut_source.py`, `ports/operator.py` | Contratos de fuente y de operador | SPEC §3, RF-10 |
 | `application/batch_service.py` | Validar, deduplicar, ritmo, reintentos, respaldo, circuito, paradas, traducción a `QueryStatus` | RF-02, RF-08, RF-09, RF-11, RF-12, RNF-02 |
-| `application/clock.py` | `Clock` y `Sleeper` inyectables (pruebas sin espera real) | RNF-05 |
+| `ports/clock.py`, `application/clock.py` | `Clock` es un puerto (los adaptadores lo usan sin importar `application`); `Sleeper` y el reloj de sistema viven en application (T-35); pruebas sin espera real | RNF-05 |
 | `adapters/contingency_source.py` | Fila pendiente de validación manual | RF-12 (F) |
 | `adapters/document_copy_source.py` | Registro de metadatos de la copia | RN-07 (C) |
 | `adapters/fake_source.py` | Fuente programable para pruebas (`build_service` exige `RUT_ALLOW_FAKE`; el adaptador no lo comprueba) | RNF-05 |
@@ -130,8 +130,9 @@ src/rut_checker/
   ports/
     rut_source.py                 # RutSourcePort(Protocol)
     operator.py                   # OperatorPort(Protocol)
+    clock.py                      # Clock(Protocol): now() aware y today() en America/Bogota
   application/
-    clock.py                      # Clock, Sleeper (Protocol) + implementaciones de sistema
+    clock.py                      # Sleeper (Protocol) + SystemClock (implementación de sistema, T-35)
     retry_policy.py               # RetryPolicy: qué excepciones, cuántos intentos, backoff, umbrales de circuito
     batch_service.py              # BatchQueryService
   adapters/
@@ -218,9 +219,9 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 | `nombre_o_razon_social` | Solo `PORTAL_DIAN_C1` | **Vacío** en C (D-3) y F |
 | `estado_rut` | Solo `PORTAL_DIAN_C1`, texto tal cual lo muestre el portal (RN-03) | **Vacío** en C (D-3) y F; nunca se inventa |
 | `fecha_consulta` | `Clock.now()` en `America/Bogota`, ISO 8601 con desfase | Fecha de procesamiento de la fila |
-| `fuente` | `SourceKind` | RNF-04 |
+| `fuente` | Siempre `RutResult.source` (`SourceKind`); `RutSourcePort.kind` solo identifica al adaptador | RNF-04 |
 | `estado_consulta` | `QueryStatus` | RF-08 |
-| `observacion` | Mensaje del catálogo + motivo; en C: "Validado contra copia del RUT de fecha AAAA-MM-DD; responsable: USR-001" + observación del área | Sin id completo |
+| `observacion` | Mensaje del catálogo + motivo; en C: "Validado contra copia del RUT de fecha AAAA-MM-DD; responsable: USR-001" + observación del área (también en copia vencida/futura; espacios colapsados, números largos enmascarados) | Sin id completo |
 
 - Una fila por fila de entrada, en el orden original, incluidas duplicadas e inválidas (G7).
 - Archivo `output/resultado_<run_id>.xlsx`, hoja `resultado`. `run_id = AAAAMMDD-HHMMSS-<4 hex>` (sin ids).
@@ -237,7 +238,8 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
   `queried_at` + `duration_ms`. `identification` es `None` solo si el estado es `ENTRADA_INVALIDA`
   (fuente `SIN_CONSULTA`). La zona horaria de `queried_at` la fija el `Clock` (T-35).
 - **`CopyVerdict`** (`VALID`, `EXPIRED`, `FUTURE_DATE`): `evaluate_copy_evidence` no lanza por fecha futura;
-  `DocumentCopySource` la traduce a `PENDIENTE_VALIDACION_MANUAL` "fecha de copia inválida".
+  `DocumentCopySource` la traduce a `PENDIENTE_VALIDACION_MANUAL` "fecha de copia inválida" con
+  `RutResult.source = CONTINGENCIA_MANUAL` (igual que la copia vencida; sin invocar el fallback).
 - Invariantes de `RutResult`: `VALIDADA_COPIA_RUT` => fuente `COPIA_RUT_TERCERO` y sin estado/nombre;
   `ENTRADA_INVALIDA` => `SIN_CONSULTA`; `estado_rut`/`name` solo con `PORTAL_DIAN_C1` o `FAKE`
   (incumplirlos es error de programación). `EXITOSA` sin `estado_rut` => `IncompleteResult` (dato).

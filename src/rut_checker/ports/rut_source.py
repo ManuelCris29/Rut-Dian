@@ -18,7 +18,10 @@ class RutSourcePort(Protocol):
 
     @property
     def kind(self) -> SourceKind:
-        """Valor que se escribe en la columna `fuente`."""
+        """Identifica al adaptador (p. ej. `run_started`, `purgar --fuente`).
+
+        La columna `fuente` de la salida sale siempre de `RutResult.source`, no de aquí.
+        """
         ...
 
     @property
