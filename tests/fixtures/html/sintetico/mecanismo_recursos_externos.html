@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<!-- SINTÉTICO — no representa el portal de la DIAN -->
+<html lang="es">
+<head><meta charset="utf-8"><title>Recursos externos sinteticos (guard de red)</title></head>
+<body>
+<p data-testid="cabecera-sintetico">SINTÉTICO — no representa el portal de la DIAN</p>
+<link rel="dns-prefetch" href="//prefetch.invalid">
+<img src="http://imagen.invalid/x.png" alt="">
+<script>
+  window.__wsListo = false;
+  try {
+    const ws = new WebSocket("ws://socket.invalid/");
+    ws.onopen = ws.onclose = ws.onerror = () => { window.__wsListo = true; };
+  } catch (e) { window.__wsListo = true; }
+</script>
+</body>
+</html>

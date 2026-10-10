@@ -66,7 +66,8 @@ jobs:
       - name: Mypy
         run: uv run mypy src tests
 
-      # tests/integration necesita el extra `portal`, que este job no instala: va en `integration`.
+      # tests/integration necesita Chromium instalado, que este job no descarga: va en `integration`.
+      # Playwright (Python) sí está en el grupo dev, así que mypy resuelve sus tipos aquí.
       - name: Pruebas offline
         run: uv run pytest -m "not portal_real" --ignore=tests/integration
 
@@ -137,9 +138,10 @@ jobs:
       - name: pip-audit
         run: uv run pip-audit --requirement "$RUNNER_TEMP/requirements-audit.txt" --disable-pip --no-deps --strict
 
-  # Integración con Chromium. Aún no hay código de portal ni pruebas en tests/integration,
-  # así que el job detecta si hay pruebas y, si no, termina en verde sin instalar el navegador.
-  # Las pruebas de integración usan fixtures HTML locales: no hay tráfico hacia la DIAN.
+  # Integración con Chromium (T-38): pruebas de mecanismo de detección con fixtures HTML
+  # sintéticos servidos desde 127.0.0.1; no hay tráfico hacia la DIAN (el navegador de pruebas
+  # aborta toda petición no local con context.route y resuelve solo 127.0.0.1/localhost).
+  # Si no hubiera pruebas en tests/integration, el job termina en verde sin instalar el navegador.
   # PENDIENTE (RNF-06): añadir matriz con windows-latest cuando existan pruebas de integración.
   integration:
     name: Integración (Chromium)

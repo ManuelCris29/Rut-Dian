@@ -20,7 +20,7 @@ rut-checker = "rut_checker.cli:app"
 [project.optional-dependencies]
 # Canal del portal (ADR-0001): solo se instala en el equipo del operador.
 portal = [
-    "playwright>=1.45",
+    "playwright>=1.51",
     "pyyaml>=6.0",
 ]
 
@@ -33,6 +33,9 @@ dev = [
     # pyyaml también en dev: las pruebas de selectors.py lo necesitan sin instalar el extra portal
     "pyyaml>=6.0",
     "types-pyyaml>=6.0",
+    # playwright también en dev: mypy y las pruebas de integración (T-38) lo necesitan; el
+    # navegador se instala aparte (`playwright install chromium`).
+    "playwright>=1.51",  # 1.51: Locator.filter(visible=...); 1.48: route_web_socket (pruebas)
     "types-openpyxl>=3.1",
     "pip-audit>=2.10.1",
 ]

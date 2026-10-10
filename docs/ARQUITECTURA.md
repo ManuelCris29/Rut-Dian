@@ -316,6 +316,11 @@ crudo ni el texto de una excepción de terceros (Obs-3, Obs-7):
 | Fallo del respaldo (`fallback.query` lanza) | `BatchQueryService` | `PENDIENTE_VALIDACION_MANUAL`, fuente `CONTINGENCIA_MANUAL`, se registra `error_code=FALLBACK_FAILED` y la clase | No | El lote sigue |
 | Cualquier otra `Exception` en una fila | — | se registra solo `error_code=UNEXPECTED` y la clase; se trata como `StructureChanged` | No | Detiene el lote (parada segura) |
 
+> **Pendiente T-49 (`TargetClosedError`):** hoy `detection.run_translated` traduce cualquier `Error`
+> de Playwright que no sea `TimeoutError` a `PortalUnavailable` (transitorio, reintentable). Un
+> navegador o página cerrados por la persona no es transitorio: T-49 debe tratarlo aparte (detener
+> el lote) y no reintentar.
+
 - `SIN_RESULTADOS`, `EXITOSA`, `PENDIENTE_VALIDACION_MANUAL` y `VALIDADA_COPIA_RUT` llegan como `RutResult`.
 - **Salvaguardas del servicio (T-35):** `HumanInterventionRequired`, `AccessBlocked`, `StructureChanged`,
   `InvalidIdentification` e `IncompleteResult` nunca se reintentan aunque la `RetryPolicy` lo pida; tope fijo de

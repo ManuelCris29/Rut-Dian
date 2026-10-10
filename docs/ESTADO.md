@@ -44,6 +44,7 @@
 | 2026-10-09 | 10 dígitos que empiezan por 8/9 sin DV y cuyo último dígito coincide con el DV de los 9 primeros → PENDIENTE_VALIDACION_MANUAL "posible NIT con DV pegado" (no se adivina, no se consulta) | revisión seguridad T-41 |
 | 2026-10-09 | RN-05: duplicado = misma identificación + misma evidencia de copia + misma nota; nunca se hereda el resultado de una fila con evidencia distinta | revisión T-35 |
 | 2026-10-09 | Responsable de validación sin fecha de copia → ENTRADA_INVALIDA "responsable sin fecha de copia" | revisión T-35 |
+| 2026-10-10 | Página cargada sin nada esperado al vencer la espera pasiva → reclasificar; si sigue sin reconocerse → ESTRUCTURA_CAMBIADA (sin reintento); QueryTimeout solo para carga/goto/fill | decisión del usuario, ADR-0003 §2.4–2.5, revisión T-38 |
 
 ## Supuestos activos
 
@@ -96,6 +97,8 @@
 - Para T-36 (servicio): pausa efectiva antes de reintento = max(min_delay, backoff).
 - ~~Para T-45 (revisor-seguridad T-35): bloqueos/operador, pausa inicial, informe parcial~~ → resuelto en T-45.
 - ~~T-40 con `RUT_SOURCE=dian_portal` depende de T-45 HECHA~~ → T-45 HECHA 2026-10-09.
+- Para T-14/T-49 (revisor-codigo T-38): `_same_page` debe ignorar parámetros de ruta `;jsessionid=…` (JSF) o habrá falso MAINTENANCE; valorar permitir `iframe[...]` como host CSS solo en `challenge_markers`; guía de selectores: un valor que empiece por `palabra=` se rechaza como prefijo de motor.
+- Para T-49: tratar `TargetClosedError` como no transitorio; `headless=False` literal en el `launch` real.
 
 ## Bitácora
 
@@ -127,3 +130,4 @@
 - 2026-10-09 — T-37 HECHA: cargador de selectores y triple llave (config/selectors.yaml solo PENDIENTE y validated: false; raíz anclada al paquete y solo <raíz>/config/selectors.yaml sin enlaces; YAML estricto sin claves duplicadas ni anclas; selectores de formulario/resultado que apunten a captcha/Cloudflare → FORBIDDEN_TARGET; habilitación solo vía EnabledPortal; fixture sintético rechazado siempre); 983 pruebas; revisor-seguridad BLOQUEANTE (llave 3 evadible con copia del fixture fuera del repo) → corregido → APROBADO CON OBSERVACIONES; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones (ingeniero-rpa).
 - 2026-10-10 — T-40 HECHA: CLI `rut-checker lote|consultar` (build_service con contingency/fake/dian_portal y triple llave, códigos 0/1/2/3, Settings inválidos sin valores, errores de uso sin eco de argumentos, id por prompt sin eco, UTF-8 en salidas redirigidas, cierre de fuentes y rastro de errores en el log sin datos; aviso de vencidos con infra/retention.find_expired); logging dividido en log_format.py; typer fijado <0.28; 1059 pruebas; prueba de humo contingency con lote ficticio exit 0; revisor-codigo y revisor-seguridad APROBADO CON OBSERVACIONES (aplicadas) (desarrollador-python).
 - 2026-10-10 — T-44 HECHA: `rut-checker purgar` (simulación por defecto con solo conteos; --confirmar borra; nombres exactos; --fuente PORTAL_DIAN_C1 ignora edad, excluye data/ y avisa huérfanos sin log; fecha más reciente entre mtime/ctime/birthtime; run_id futuro descartado; borrado parcial → código 1; nunca fuera de data/output/logs ni siguiendo enlaces); 1111 pruebas; revisor-codigo y revisor-seguridad APROBADO CON OBSERVACIONES (aplicadas) (desarrollador-python).
+- 2026-10-10 — T-38 HECHA: detección de mantenimiento/desafío/bloqueo/5xx (orden: marcador URL → desafío → 5xx → bloqueo → esperado), espera pasiva única con `filter(visible=True)`, al vencer la espera reclasificar → ESTRUCTURA_CAMBIADA (decisión del usuario), `run_translated` sin `__context__`, SelectorSpec rechaza sintaxis de frame/motor y valida roles ARIA, guard de red de pruebas (route_web_socket, service_workers block, host-resolver-rules solo en pruebas), prueba AST ampliada con exenciones por tipo de nodo; 12 fixtures sintéticos; playwright >= 1.51; 1289 pruebas; revisor-seguridad APROBADO; revisor-codigo APROBADO CON OBSERVACIONES tras 3 iteraciones (3.ª autorizada por el usuario) (ingeniero-rpa).

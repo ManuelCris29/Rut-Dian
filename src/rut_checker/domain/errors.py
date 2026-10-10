@@ -200,6 +200,7 @@ class SelectorsReason(StrEnum):
     OUTSIDE_PROJECT = "archivo de selectores fuera del proyecto"
     DUPLICATE_KEY = "clave duplicada en el YAML"
     FORBIDDEN_TARGET = "un selector del formulario o resultado apunta al desafío"
+    FORBIDDEN_SELECTOR_SYNTAX = "sintaxis de selector no permitida"
     INVALID_APPROVAL_REF = "la referencia de aprobación esperada no es válida"
     SYNTHETIC = "archivo de selectores sintético"
     NOT_SYNTHETIC = "el archivo no es sintético"

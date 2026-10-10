@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<!-- SINTÉTICO — no representa el portal de la DIAN -->
+<html lang="es">
+<head><meta charset="utf-8"><title>Desafio sintetico sin resolver</title></head>
+<body>
+<p data-testid="cabecera-sintetico">SINTÉTICO — no representa el portal de la DIAN</p>
+<div data-testid="desafio-sintetico" tabindex="0" style="width:200px;height:60px;border:1px solid #888">Desafío sintético</div>
+<script>
+  // Registro de interacciones: la prueba exige que quede vacío (el mecanismo es pasivo).
+  window.__eventosDesafio = [];
+  const el = document.querySelector("[data-testid=desafio-sintetico]");
+  for (const tipo of ["click", "mousedown", "mouseover", "focus", "keydown", "input"]) {
+    el.addEventListener(tipo, () => window.__eventosDesafio.push(tipo));
+  }
+</script>
+</body>
+</html>

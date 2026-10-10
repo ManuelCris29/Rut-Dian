@@ -4,12 +4,122 @@ Inmutables, estrictos (sin coerción de tipos), sin claves extra y sin eco del v
 errores de validación.
 """
 
+import re
+import unicodedata
 from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 Text = Annotated[str, StringConstraints(max_length=500)]
 Strategy = Literal["label", "role", "text", "css", "testid"]
+
+
+# Roles ARIA admitidos por `get_by_role` de Playwright (error de configuración al cargar).
+ARIA_ROLES = frozenset(
+    {
+        "alert",
+        "alertdialog",
+        "application",
+        "article",
+        "banner",
+        "blockquote",
+        "button",
+        "caption",
+        "cell",
+        "checkbox",
+        "code",
+        "columnheader",
+        "combobox",
+        "complementary",
+        "contentinfo",
+        "definition",
+        "deletion",
+        "dialog",
+        "directory",
+        "document",
+        "emphasis",
+        "feed",
+        "figure",
+        "form",
+        "generic",
+        "grid",
+        "gridcell",
+        "group",
+        "heading",
+        "img",
+        "insertion",
+        "link",
+        "list",
+        "listbox",
+        "listitem",
+        "log",
+        "main",
+        "marquee",
+        "math",
+        "menu",
+        "menubar",
+        "menuitem",
+        "menuitemcheckbox",
+        "menuitemradio",
+        "meter",
+        "navigation",
+        "none",
+        "note",
+        "option",
+        "paragraph",
+        "presentation",
+        "progressbar",
+        "radio",
+        "radiogroup",
+        "region",
+        "row",
+        "rowgroup",
+        "rowheader",
+        "scrollbar",
+        "search",
+        "searchbox",
+        "separator",
+        "slider",
+        "spinbutton",
+        "status",
+        "strong",
+        "subscript",
+        "superscript",
+        "switch",
+        "tab",
+        "table",
+        "tablist",
+        "tabpanel",
+        "term",
+        "textbox",
+        "time",
+        "timer",
+        "toolbar",
+        "tooltip",
+        "tree",
+        "treegrid",
+        "treeitem",
+    }
+)
+# Sintaxis de selector que permitiría salir del DOM principal o usar motores internos (M-1):
+# `>>` encadena motores (`internal:control=enter-frame`), `internal:` es el motor interno y
+# "frame" cubre frame/iframe. Un prefijo `motor=` (xpath=, css=, text=, id=, nth=, _react=,
+# data-testid=, ...), un XPath (`//`, `..`) o un texto entrecomillado cambian el motor.
+FORBIDDEN_SYNTAX_MESSAGE = "forbidden_selector_syntax"
+_FORBIDDEN_SUBSTRINGS = (">>", "internal:", "frame")
+_ENGINE_PREFIX = re.compile(r"^\s*[A-Za-z_][\w-]*\s*=")
+_SPECIAL_START = re.compile(r"""^\s*(//|\.\.|["'`])""")
+
+
+def _has_forbidden_syntax(text: str) -> bool:
+    folded = "".join(
+        ch for ch in unicodedata.normalize("NFKC", text) if unicodedata.category(ch) != "Cf"
+    ).lower()
+    return (
+        any(term in folded for term in _FORBIDDEN_SUBSTRINGS)
+        or _ENGINE_PREFIX.match(folded) is not None
+        or _SPECIAL_START.match(folded) is not None
+    )
 
 
 class _Strict(BaseModel):
@@ -29,6 +139,12 @@ class SelectorSpec(_Strict):
 
     @model_validator(mode="after")
     def _complete_for_strategy(self) -> Self:
+        if any(_has_forbidden_syntax(text) for text in (self.value, self.role, self.name)):
+            raise ValueError(FORBIDDEN_SYNTAX_MESSAGE)
+        # `PENDIENTE` (plantilla sin validar) lo rechaza después `selectors._has_placeholder`.
+        is_placeholder = self.role.strip().upper() == "PENDIENTE"
+        if self.strategy == "role" and not is_placeholder and self.role not in ARIA_ROLES:
+            raise ValueError("rol ARIA no admitido")
         needed = self.role if self.strategy == "role" else self.value
         if not needed.strip():
             raise ValueError("selector incompleto para su estrategia")

@@ -27,6 +27,7 @@ from rut_checker.adapters.dian_portal.location import (
     _snapshot_exists,
 )
 from rut_checker.adapters.dian_portal.models import (
+    FORBIDDEN_SYNTAX_MESSAGE,
     DetectionSelectors,
     PortalSelectors,
     SelectorSpec,
@@ -110,7 +111,9 @@ def _parse_file(path: Path) -> PortalSelectors:
     """Lee y valida la estructura (sin comprobar la ubicación ni la triple llave)."""
     try:
         return PortalSelectors.model_validate(read_yaml(path))
-    except ValidationError:
+    except ValidationError as error:
+        if any(FORBIDDEN_SYNTAX_MESSAGE in str(item["msg"]) for item in error.errors()):
+            raise SelectorsNotValidatedError(SelectorsReason.FORBIDDEN_SELECTOR_SYNTAX) from None
         raise SelectorsNotValidatedError(SelectorsReason.INVALID_STRUCTURE) from None
 
 

@@ -69,6 +69,22 @@ un doble programable.
    esperado, el resultado es `StructureChanged` (detiene el lote), **nunca** un dato vacío ni un
    reintento ciego. Un desafío no catalogado termina así en una parada segura.
 
+**Desviación implementada en T-38 (orden de mantenimiento).** El paso 1 se divide: (1a) marcador de
+URL de mantenimiento o URL final distinta de la del formulario (`form_url`) → `PortalUnavailable`;
+luego el desafío (paso 2); después `response.status >= 500` → `PortalUnavailable`; luego el bloqueo
+(paso 3). Motivo: un desafío servido con 503 sigue siendo un desafío y debe ceder el control a la
+persona, no reintentarse como mantenimiento. Además, `check_page` espera de forma pasiva (un solo
+`wait_for` sobre elemento esperado, host del desafío o marcador de bloqueo) con un tiempo que fija
+quien llama (solo cuentan coincidencias visibles; `Locator.filter(visible=True)`, Playwright >= 1.51).
+**Decisión del usuario 2026-10-10:** al agotarse la espera pasiva no se lanza `QueryTimeout`: la
+página se reclasifica; un desafío o bloqueo detectados siguen ganando (`HumanInterventionRequired`
+o `AccessBlocked`) y, si no se reconoce nada o aparece un tipo no esperado (p. ej. el formulario otra
+vez tras enviar), el resultado es `StructureChanged` (`ESTRUCTURA_CAMBIADA`, sin reintento ciego).
+`QueryTimeout` queda solo para tiempos agotados de `goto`, `fill` o carga (§2.4 y §2.5 se leen con
+esta precisión). Los selectores no admiten `>>`, `internal:`, `frame` ni prefijos de
+motor (`SelectorsReason.FORBIDDEN_SELECTOR_SYNTAX`), para que ningún valor del YAML pueda entrar al
+frame del desafío.
+
 ### 3. Pausa asistida (cuando el paso 2 detecta un desafío)
 
 1. Registrar evento `challenge_detected` (id enmascarado, `row_index`, `attempt`).

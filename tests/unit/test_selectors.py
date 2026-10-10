@@ -454,12 +454,10 @@ def test_snapshot_must_live_in_docs_investigacion(tmp_path: Path, snapshot: str)
         "arkose",
     ],
 )
-@pytest.mark.parametrize("where", ["form-value", "form-role", "form-name", "result-value"])
+@pytest.mark.parametrize("where", ["form-value", "form-name", "result-value"])
 def test_forbidden_target_in_form_or_result_fails(tmp_path: Path, term: str, where: str) -> None:
     if where == "form-value":
         document = _doc(form=_form(id_input={"strategy": "css", "value": f"#{term}-x"}))
-    elif where == "form-role":
-        document = _doc(form=_form(submit_button={"strategy": "role", "role": term, "name": "n"}))
     elif where == "form-name":
         document = _doc(
             form=_form(submit_button={"strategy": "role", "role": "button", "name": term})
@@ -476,7 +474,7 @@ def test_forbidden_target_in_form_or_result_fails(tmp_path: Path, term: str, whe
         "/cdn-cgi/challenge-platform/h/b",
         "#challenge-form",
         "geetest_panel",
-        "div.Arkose_Frame",
+        "div.Arkose_Panel",
         "challenge_platform",
     ],
 )
@@ -492,7 +490,7 @@ def test_forbidden_target_is_checked_after_nfkc_and_ignoring_format_chars(tmp_pa
 
 
 def test_challenge_markers_may_name_the_challenge(tmp_path: Path) -> None:
-    detection = _detection(challenge_markers=[{"strategy": "css", "value": "iframe-captcha"}])
+    detection = _detection(challenge_markers=[{"strategy": "css", "value": "caja-captcha"}])
     path = _write(tmp_path, _doc(detection=detection))
     assert _load_validated(path, APPROVAL_REF, tmp_path)
 
@@ -751,3 +749,81 @@ def test_only_selectors_module_references_the_synthetic_entrypoint() -> None:
         )
     ]
     assert not offenders, f"build_service no puede usar las vías de prueba: {offenders}"
+
+
+# --- M-1: sintaxis de selector que sale del DOM principal o cambia de motor -------------------
+
+FORBIDDEN_SYNTAX = [
+    "div >> internal:control=enter-frame",
+    "iframe",
+    "#mi-iframe",
+    "div.marco-frame",
+    "internal:role=button",
+    "xpath=//div",
+    "css=div",
+    "text=algo",
+    "id=algo",
+    "nth=0",
+    "_react=Foo",
+    "_vue=Foo",
+    "data-testid=algo",
+    "//div[@id='x']",
+    "../div",
+    '"texto entrecomillado"',
+    chr(0xFF49) + "frame",  # i de ancho completo + frame (NFKC)
+]
+
+
+@pytest.mark.parametrize("value", FORBIDDEN_SYNTAX)
+@pytest.mark.parametrize("where", ["form", "result", "challenge", "block", "name", "role"])
+def test_forbidden_selector_syntax_is_rejected_everywhere(
+    tmp_path: Path, value: str, where: str
+) -> None:
+    spec: dict[str, object] = {"strategy": "css", "value": value}
+    if where == "form":
+        document = _doc(form=_form(id_input=spec))
+    elif where == "result":
+        document = _doc(result=_result(status=spec))
+    elif where == "challenge":
+        document = _doc(detection=_detection(challenge_markers=[spec]))
+    elif where == "block":
+        document = _doc(detection=_detection(block_markers=[spec]))
+    elif where == "name":
+        role_spec = {"strategy": "role", "role": "button", "name": value}
+        document = _doc(form=_form(submit_button=role_spec))
+    else:
+        role_spec = {"strategy": "role", "role": value, "name": "n"}
+        document = _doc(form=_form(submit_button=role_spec))
+    path = _write(tmp_path, document)
+    with pytest.raises(SelectorsNotValidatedError) as info:
+        _load_validated(path, APPROVAL_REF, tmp_path)
+    assert info.value.reason is SelectorsReason.FORBIDDEN_SELECTOR_SYNTAX
+    assert not any(ch.isdigit() for ch in str(info.value))
+
+
+def test_enter_frame_is_rejected_in_challenge_markers(tmp_path: Path) -> None:
+    marker = {"strategy": "css", "value": "div >> internal:control=enter-frame"}
+    path = _write(tmp_path, _doc(detection=_detection(challenge_markers=[marker])))
+    with pytest.raises(SelectorsNotValidatedError) as info:
+        _load_validated(path, APPROVAL_REF, tmp_path)
+    assert info.value.reason is SelectorsReason.FORBIDDEN_SELECTOR_SYNTAX
+
+
+def test_unknown_aria_role_is_a_configuration_error(tmp_path: Path) -> None:
+    spec = {"strategy": "role", "role": "boton-inexistente", "name": "n"}
+    _fails(
+        _write(tmp_path, _doc(form=_form(submit_button=spec))), SelectorsReason.INVALID_STRUCTURE
+    )
+
+
+def test_aria_roles_match_playwright_literal() -> None:
+    import re
+
+    import playwright.sync_api as sync_api
+
+    from rut_checker.adapters.dian_portal.models import ARIA_ROLES
+
+    source = Path(sync_api.__file__).with_name("_generated.py").read_text(encoding="utf-8")
+    start = source.index("def get_by_role")
+    block = source[start : source.index("]", start)]
+    assert set(re.findall(r'"([a-z]+)"', block)) == set(ARIA_ROLES)

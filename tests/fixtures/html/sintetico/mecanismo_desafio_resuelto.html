@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<!-- SINTÉTICO — no representa el portal de la DIAN -->
+<html lang="es">
+<head><meta charset="utf-8"><title>Desafio sintetico resuelto</title></head>
+<body>
+<p data-testid="cabecera-sintetico">SINTÉTICO — no representa el portal de la DIAN</p>
+<div data-testid="desafio-sintetico" id="desafio">Desafío sintético</div>
+<div id="contenido" hidden>
+  <input type="text" data-testid="campo-id-sintetico" aria-label="Identificación sintética">
+  <button type="button" data-testid="boton-enviar-sintetico">Enviar</button>
+</div>
+<script>
+  // La prueba simula que una persona resolvió el desafío llamando a esta función (sin tocarlo).
+  window.__resolverSintetico = () => {
+    document.getElementById("desafio").hidden = true;
+    document.getElementById("contenido").hidden = false;
+  };
+</script>
+</body>
+</html>

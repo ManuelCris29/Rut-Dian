@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<!-- SINTÉTICO — no representa el portal de la DIAN -->
+<html lang="es">
+<head><meta charset="utf-8"><title>Resultado sintetico tardio</title></head>
+<body>
+<p data-testid="cabecera-sintetico">SINTÉTICO — no representa el portal de la DIAN</p>
+<script>
+  // Simula una respuesta AJAX lenta: el resultado aparece tras unos ms.
+  setTimeout(() => {
+    const p = document.createElement("p");
+    p.dataset.testid = "estado-sintetico";
+    p.textContent = "ESTADO-SINTETICO";
+    document.body.appendChild(p);
+  }, 500);
+</script>
+</body>
+</html>

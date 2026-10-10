@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<!-- SINTÉTICO — no representa el portal de la DIAN -->
+<html lang="es">
+<head><meta charset="utf-8"><title>Desafio sintetico tardio</title></head>
+<body>
+<p data-testid="cabecera-sintetico">SINTÉTICO — no representa el portal de la DIAN</p>
+<script>
+  // El desafío aparece tarde, después de la carga inicial.
+  setTimeout(() => {
+    const d = document.createElement("div");
+    d.dataset.testid = "desafio-sintetico";
+    d.textContent = "Desafío sintético";
+    document.body.appendChild(d);
+  }, 500);
+</script>
+</body>
+</html>
