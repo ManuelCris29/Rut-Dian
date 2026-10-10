@@ -245,6 +245,7 @@ def test_result_repr_hides_name_and_observation() -> None:
     text = repr(result)
     assert NAME not in text
     assert "obs privada" not in text
+    assert "REGISTRO ACTIVO" not in text
     assert "EXITOSA" in text
 
 

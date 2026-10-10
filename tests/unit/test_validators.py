@@ -27,7 +27,7 @@ def _reason(raw: object, dv: str | None = None) -> InvalidReason:
         (" 1000000001 ", (CEDULA, None)),
         ("1.000.000.001", (CEDULA, None)),
         ("1,000,000,001", (CEDULA, None)),
-        ("1000 000 001", (CEDULA, None)),
+        ("1 000 000 001", (CEDULA, None)),
         (1000000001.0, (CEDULA, None)),
         (1000000001, (CEDULA, None)),
         ("900.000.001-7", ("900000001", "7")),
@@ -244,3 +244,54 @@ def test_huge_int_is_length_error() -> None:
 @pytest.mark.parametrize("raw", ["0", "000", 0, "0" * 10])
 def test_all_zeros_is_rejected(raw: object) -> None:
     assert _reason(raw) is InvalidReason.LENGTH_OUT_OF_RANGE
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["900000001 7", "900 000 001 7", "1000 000 001", "1  000 000", "10 00", "1 0000 000"],
+)
+def test_badly_grouped_spaces_are_rejected(raw: str) -> None:
+    with pytest.raises(InvalidIdentification) as info:
+        normalize_identification(raw)
+    assert info.value.reason is InvalidReason.NON_NUMERIC
+
+
+def test_unicode_spaces_group_thousands() -> None:
+    spaced = f"1{chr(0xA0)}000{chr(0x2009)}000{chr(0x202F)}001"
+    assert normalize_identification(spaced) == (CEDULA, None)
+
+
+def test_spaces_around_dv_hyphen_are_kept_accepted() -> None:
+    """El DV lo une el guion explícito; los espacios alrededor son solo formato."""
+    assert normalize_identification("900.000.001 - 7") == ("900000001", "7")
+
+
+def _glued(base: str, dv: str) -> str:
+    return base + dv
+
+
+@pytest.mark.parametrize("last", range(1, 10))
+def test_glued_check_digit_is_flagged(last: int) -> None:
+    base = f"90000000{last}"
+    result = validate_identification(_glued(base, _reference_dv(base)), None)
+    assert result.possible_glued_check_digit is True
+    assert result.dv is None
+
+
+def test_glued_check_digit_not_flagged_when_it_does_not_match() -> None:
+    base = "900000001"
+    wrong = str((int(_reference_dv(base)) + 1) % 10)
+    assert validate_identification(base + wrong, None).possible_glued_check_digit is False
+
+
+def test_glued_check_digit_not_flagged_when_dv_arrives_or_other_shapes() -> None:
+    base = "900000001"
+    dv = _reference_dv(base)
+    assert validate_identification(base, dv).possible_glued_check_digit is False
+    assert validate_identification(CEDULA, None).possible_glued_check_digit is False
+    assert validate_identification(base, None).possible_glued_check_digit is False
+    # 10 dígitos que no empiezan por 8 ni 9 no se marcan aunque coincida el DV
+    ten = "100000000"
+    assert (
+        validate_identification(ten + _reference_dv(ten), None).possible_glued_check_digit is False
+    )

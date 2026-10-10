@@ -8,8 +8,8 @@ import re
 _VISIBLE_DIGITS = 4
 _MASK_CHAR = "*"
 _MIN_VISIBLE_LENGTH = 7
-# Dígitos con separadores comunes (punto, coma, barra, espacio, guion), sin saltos de línea.
-_DIGIT_RUN = re.compile(r"\d[\d.,/ -]{4,}\d")
+# Dígitos con separadores comunes (punto, coma, barra, _, espacio, tab, guion), sin saltos de línea.
+_DIGIT_RUN = re.compile(r"\d[\d.,/_ \t-]{4,}\d")
 
 
 def mask_identification(value: str) -> str:
@@ -40,7 +40,7 @@ def mask_identification(value: str) -> str:
 def mask_digit_runs(text: str) -> str:
     r"""Enmascara en texto libre toda secuencia que parezca un número de identificación.
 
-    Reemplaza cada coincidencia de `\d[\d.,/ -]{4,}\d` por `mask_identification`.
+    Reemplaza cada coincidencia de `\d[\d.,/_ \t-]{4,}\d` por `mask_identification`.
     Limitación aceptada: el patrón también casa fechas ISO (`2026-10-09`) y otros
     números largos; es un filtro conservador para mensajes libres. Los campos
     estructurados (fechas, duración) no pasan por este filtro. Las cédulas sueltas

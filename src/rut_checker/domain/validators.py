@@ -27,7 +27,9 @@ _MAX_EXACT_FLOAT = 2**53
 _DIGITS = re.compile(r"[0-9]+")
 _SINGLE_DIGIT = re.compile(r"[0-9](?:\.0+)?")
 _DECIMAL_ZEROS = re.compile(r"([0-9]+)[.,]0{1,2}")
-_SPACE_BETWEEN_DIGITS = re.compile(r"[0-9]\s+[0-9]")
+_SPACE_GROUPED = re.compile(r"[0-9]{1,3}(?: [0-9]{3})+")
+_GLUED_DV_LENGTH = 10
+_GLUED_DV_PREFIXES = ("8", "9")
 _GROUPED = re.compile(r"[0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{1,3}(?:,[0-9]{3})+")
 # Guiones Unicode (U+2010 a U+2015) y signo menos (U+2212) que Excel/Word suelen producir.
 _UNICODE_DASHES = str.maketrans(dict.fromkeys([*range(0x2010, 0x2016), 0x2212], "-"))
@@ -38,9 +40,10 @@ def normalize_identification(raw: object) -> tuple[str, str | None]:
 
     Acepta texto, enteros y flotantes de Excel sin parte decimal (`1000000001.0` → `"1000000001"`).
     En texto:
-    - Todo espacio en blanco (incluido el no separable) se elimina, también como separador de
-      grupos (`"1 000 000 001"`); pero si el texto contiene `.` o `,`, un espacio entre dígitos
-      se rechaza (`"900.000 000"`, `"1 000,000"`): mezclar tipos de separador es ambiguo.
+    - Los espacios (incluidos los Unicode, como el no separable) al inicio, al final y alrededor
+      del guion del DV son solo formato. Entre dígitos solo se admiten como miles bien agrupados
+      (`"1 000 000 001"`) y sin `.`/`,`; todo lo demás (`"1000 000 001"`, `"900000001 7"`,
+      `"900.000 000"`) se rechaza: el DV nunca se separa con espacio.
     - Los guiones Unicode se tratan como `-`; un único `-` separa el DV final.
     - `.` y `,` solo se aceptan como (a) parte decimal nula de 1 o 2 ceros (`"900000001.0"`,
       `"12345678,00"`) o (b) separador de miles con agrupamiento válido de un solo tipo
@@ -100,17 +103,26 @@ def _strip_separators(base: str) -> str:
     raise InvalidIdentification(InvalidReason.NON_NUMERIC)
 
 
+def _collapse_space_groups(base: str) -> str:
+    """Admite espacios solo como miles bien agrupados (`1 000 000 001`) y sin `.`/`,`."""
+    spaced = "".join(" " if ch.isspace() else ch for ch in base)
+    if " " not in spaced:
+        return spaced
+    if "." in spaced or "," in spaced or _SPACE_GROUPED.fullmatch(spaced) is None:
+        raise InvalidIdentification(InvalidReason.NON_NUMERIC)
+    return spaced.replace(" ", "")
+
+
 def _split_text(text: str) -> tuple[str, str | None]:
     translated = text.translate(_UNICODE_DASHES)
-    if ("." in translated or "," in translated) and _SPACE_BETWEEN_DIGITS.search(translated):
-        raise InvalidIdentification(InvalidReason.NON_NUMERIC)
-    compact = "".join(translated.split())
-    if not compact:
+    if not translated.strip():
         raise InvalidIdentification(InvalidReason.EMPTY)
-    base, separator, suffix = compact.partition("-")
-    base = _strip_separators(base)
+    raw_base, separator, raw_suffix = translated.partition("-")
+    # Espacios alrededor del guion del DV son solo formato; el DV nunca se separa con espacio.
+    base = _strip_separators(_collapse_space_groups(raw_base.strip()))
     if not separator:
         return base, None
+    suffix = raw_suffix.strip()
     if not suffix or "-" in suffix:
         raise InvalidIdentification(InvalidReason.NON_NUMERIC)
     if _DIGITS.fullmatch(suffix) is None or len(suffix) != 1:
@@ -132,6 +144,8 @@ def validate_identification(raw: object, dv: str | None) -> IdentificationInput:
     """Normaliza y valida formato, longitud y DV de una identificación.
 
     Si el DV llega por sufijo y por columna, ambos deben coincidir. Sin DV no se calcula nada.
+    Un número de 10 dígitos que empieza por 8 o 9, sin DV, cuyo último dígito coincide con el DV
+    de los 9 primeros se marca `possible_glued_check_digit` (no se adivina; ver ARQUITECTURA §5.2).
     La posición de la fila no interviene: `BatchQueryService` la conoce por `InputRow.row_index`.
 
     Args:
@@ -153,4 +167,18 @@ def validate_identification(raw: object, dv: str | None) -> IdentificationInput:
     final_dv = suffix_dv if suffix_dv is not None else column_dv
     if final_dv is not None and nit.calc_check_digit(number) != final_dv:
         raise InvalidIdentification(InvalidReason.BAD_CHECK_DIGIT)
-    return IdentificationInput(identification=number, dv=final_dv)
+    return IdentificationInput(
+        identification=number,
+        dv=final_dv,
+        possible_glued_check_digit=_looks_like_glued_nit(number, final_dv),
+    )
+
+
+def _looks_like_glued_nit(number: str, dv: str | None) -> bool:
+    """Heurística de revisión: NIT de 9 dígitos con el DV pegado, sin DV aparte (no se adivina)."""
+    return (
+        dv is None
+        and len(number) == _GLUED_DV_LENGTH
+        and number.startswith(_GLUED_DV_PREFIXES)
+        and nit.calc_check_digit(number[:-1]) == number[-1]
+    )

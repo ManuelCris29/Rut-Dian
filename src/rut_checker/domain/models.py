@@ -89,12 +89,16 @@ class IdentificationInput(_DomainModel):
             incorrecto.
         copy_evidence: Copia del RUT aportada, si la hay.
         note: Observación libre del área (máx. 200 caracteres). Nunca se muestra en `repr`.
+        possible_glued_check_digit: Lo calcula `validate_identification`: 10 dígitos, prefijo 8 o 9,
+            sin DV y con el último dígito igual al DV de los 9 primeros. Indica posible NIT con
+            DV pegado; el servicio la envía a revisión manual sin consultar la fuente.
     """
 
     identification: str
     dv: str | None = None
     copy_evidence: CopyEvidence | None = None
     note: str | None = Field(default=None, repr=False)
+    possible_glued_check_digit: bool = Field(default=False, repr=False)
 
     @field_validator("identification", mode="before")
     @classmethod
@@ -173,14 +177,15 @@ class RutResult(_DomainModel):
     Attributes:
         status: Estado final de la consulta.
         source: Origen del dato (columna `fuente`).
-        estado_rut: Estado tal cual lo muestra el portal; vacío si no aplica.
+        estado_rut: Estado tal cual lo muestra el portal; vacío si no aplica; no se muestra
+            en `repr` (ARQUITECTURA §10).
         name: Nombre o razón social (solo portal); no se muestra en `repr`.
         observation: Mensaje para la columna `observacion`; no se muestra en `repr`.
     """
 
     status: QueryStatus
     source: SourceKind
-    estado_rut: str = ""
+    estado_rut: str = Field(default="", repr=False)
     name: str = Field(default="", repr=False)
     observation: str = Field(default="", repr=False)
 

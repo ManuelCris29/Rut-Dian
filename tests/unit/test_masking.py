@@ -92,3 +92,8 @@ def test_mask_digit_runs_several_ids() -> None:
 def test_mask_digit_runs_short_ids_not_masked() -> None:
     # Cédulas sueltas de 3-5 dígitos no se enmascaran (límite documentado).
     assert mask_digit_runs("cedula 12345 fin") == "cedula 12345 fin"
+
+
+def test_mask_digit_runs_handles_tabs_and_underscores() -> None:
+    assert mask_digit_runs("nit 900" + chr(9) + "000" + chr(9) + "001 ok") == "nit *****0001 ok"
+    assert mask_digit_runs("id 1_000_000_001 ok") == "id ******0001 ok"
