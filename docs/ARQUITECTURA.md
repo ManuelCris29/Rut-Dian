@@ -251,6 +251,12 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 - Archivo `output/resultado_<run_id>.xlsx`, hoja `resultado`. `run_id = AAAAMMDD-HHMMSS-<4 hex>` (sin ids).
 - **Neutralización (Obs-9):** toda celda de texto que empiece por `=`, `+`, `-`, `@`, tabulador o retorno
   de carro se prefija para que Excel la trate como texto. Aplica también a CSV/JSON (T-47).
+  El apóstrofo es **visible y forma parte del valor** (decisión: se mantiene; sobrevive a CSV/JSON). Los
+  caracteres que XML/UTF-8 no admiten (controles C0, surrogates sueltos, U+FFFE/U+FFFF) se reemplazan por U+FFFD.
+- La nota del área (`observacion` de entrada) de filas `ENTRADA_INVALIDA` **nunca** se exporta.
+- `fecha_consulta` se convierte siempre a `America/Bogota`.
+- Escritura atómica (temporal en el mismo directorio + `os.replace`); `export_excel(...) -> ExportReport(path, kind)`
+  con `kind ∈ {XLSX, XLSX_ALTERNATIVE, JSON_BACKUP}`.
 
 ### 5.4 Modelos de dominio (T-42, `domain/models.py`)
 
@@ -298,7 +304,8 @@ crudo ni el texto de una excepción de terceros (Obs-3, Obs-7):
 | `StructureChanged` | dian_portal (incluye red de seguridad, ADR-0003 §2) | `ESTRUCTURA_CAMBIADA` | **No** | **Detiene el lote**; restantes al respaldo |
 | `IncompleteResult` | modelo `RutResult` / extractor | `RESULTADO_INCOMPLETO` | No | — |
 | `HumanInterventionRequired`, `AccessBlocked` | dian_portal | `REQUIERE_INTERVENCION_HUMANA` | **Nunca** | Bloqueo: 1.º pregunta al operador, 2.º seguido detiene |
-| `ExportError` | exporters | `ERROR_EXPORTACION` (nivel ejecución) | 1, nombre alternativo en `output/`; luego JSON de respaldo en `output/` | Código 3 |
+| `ExportError` | exporters | `ERROR_EXPORTACION` (nivel ejecución) | 1, nombre alternativo en `output/`; luego JSON de respaldo en `output/` (`ExportKind.JSON_BACKUP` → código 3 sin excepción); `ExportError` solo si fallan los tres | Código 3 |
+| `UnsafePathError` | exporters | — | No (ruta fuera de `output/` o sufijo ≠ `.xlsx`) | Código 2 |
 | `SourceNotEnabledError`, `SelectorsNotValidatedError`, `FakeNotAllowedError` | `build_service` | — (configuración) | No | Código 2, sin navegador ni red |
 | Fallo del respaldo (`fallback.query` lanza) | `BatchQueryService` | `PENDIENTE_VALIDACION_MANUAL`, fuente `CONTINGENCIA_MANUAL`, se registra `error_code=FALLBACK_FAILED` y la clase | No | El lote sigue |
 | Cualquier otra `Exception` en una fila | — | se registra solo `error_code=UNEXPECTED` y la clase; se trata como `StructureChanged` | No | Detiene el lote (parada segura) |
@@ -537,6 +544,24 @@ circuito; copia ≤ 30 días; retención de snapshots 30 días; zona `America/Bo
   operador, canal de entrega restringido del Excel al área solicitante, y documenta el riesgo del id en el
   historial de PowerShell (Obs-11). Copias del Excel fuera de esas carpetas y PDFs del repositorio
   documental quedan bajo la política de T-63.
+- **Rutas (T-40b, `infra/paths.py`):** el árbol git se detecta buscando `.git` (directorio o archivo)
+  en la ruta resuelta o sus padres, sin invocar git. Todo se compara tras `resolve()` (symlinks/junctions).
+  La excepción vale solo para `<raíz>/output|logs|data` exactos que resuelven a sí mismos, su contenido, y
+  **solo si el `.gitignore` de esa raíz los lista** (líneas exactas `output`, `output/`, `/output`,
+  `/output/`; una línea de negación `!` o un `.gitignore` ilegible implican rechazo): así un repositorio
+  ajeno con una carpeta llamada `output` no se acepta. `--salida` relativa se interpreta respecto a
+  `RUT_OUTPUT_DIR` (no al cwd) y debe quedar dentro de ella tras `resolve()` (bloquea `..`); el destino
+  final también pasa `assert_safe_dir` (detecta un `.git` anidado). Se rechazan como `INVALID_PATH`
+  componentes con `:` fuera de la unidad (ADS), nombres reservados de Windows (`CON`, `PRN`, `AUX`, `NUL`,
+  `COM1-9`, `LPT1-9`, con o sin extensión) y componentes que terminan en punto o espacio, en todas las
+  plataformas. Los errores son `UnsafePathError` (motivo cerrado, sin ruta ni causa encadenada; la CLI los
+  traduce a código 2). `is_synced_folder` nunca lanza y solo produce aviso: detecta `OneDrive*`, `Dropbox*`,
+  `Google Drive`/`GoogleDrive*`, `My Drive`, `Mi unidad`, `iCloudDrive`, `Box`, `Nextcloud` y las rutas bajo
+  las variables de entorno `OneDrive*`. `ensure_private_dir` crea sobre la ruta resuelta, revalida tras
+  crear (TOCTOU) y usa modo 0o700 en POSIX; en Windows las ACL las configura el administrador (T-60).
+- **Runbook (carpeta personal versionada):** si la carpeta de trabajo está dentro de un repositorio git
+  (p. ej. una carpeta personal versionada con git), se rechaza: use una carpeta fuera de cualquier repo o
+  `<repo>/output` (con `output/` en el `.gitignore` de ese repo).
 - **RN-04 [CONFIRMADO 2026-10-09] (D-2):** revalidación solo al vincular o renovar; sin periodicidad
   automática en el MVP. RF-14 pasa a *Won't (MVP)*.
 
