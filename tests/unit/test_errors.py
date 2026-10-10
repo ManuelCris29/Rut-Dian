@@ -78,3 +78,14 @@ def test_new_file_reasons_exist() -> None:
     names = {r.name for r in InvalidFileReason}
     assert {"DUPLICATE_COLUMN", "FIRST_SHEET_HIDDEN", "TOO_MANY_RAW_ROWS"} <= names
     assert "DUPLICATE_ID_COLUMN" not in names
+
+
+def test_unsafe_path_error_keeps_closed_reason() -> None:
+    exc = errors.UnsafePathError(errors.UnsafePathReason.INSIDE_GIT_TREE)
+    assert exc.reason is errors.UnsafePathReason.INSIDE_GIT_TREE
+    assert errors.UnsafePathReason.INSIDE_GIT_TREE.value in str(exc)
+
+
+def test_unsafe_path_error_rejects_free_text() -> None:
+    with pytest.raises(TypeError, match="motivo"):
+        errors.UnsafePathError("C:/datos/1234567890")  # type: ignore[arg-type]  # prueba intencional

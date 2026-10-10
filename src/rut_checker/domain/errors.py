@@ -86,6 +86,30 @@ class InvalidInputFile(RutCheckerError):
         return f"Archivo de entrada inválido: {self.reason.value}"
 
 
+class UnsafePathReason(StrEnum):
+    """Conjunto cerrado de motivos por los que una ruta de salida o carpeta se rechaza."""
+
+    OUTSIDE_OUTPUT_DIR = "la ruta queda fuera de la carpeta de salida"
+    INSIDE_GIT_TREE = "la carpeta está dentro de un árbol git"
+    INVALID_PATH = "ruta inválida"
+
+
+class UnsafePathError(RutCheckerError):
+    """Ruta de salida o carpeta de trabajo insegura (sin incluir la ruta en el mensaje).
+
+    La CLI la traduce al código de salida 2 (ARQUITECTURA §6).
+    """
+
+    def __init__(self, reason: UnsafePathReason) -> None:
+        if not isinstance(reason, UnsafePathReason):
+            raise TypeError("motivo de ruta insegura fuera del conjunto cerrado")
+        self.reason = reason
+        super().__init__()
+
+    def _message(self) -> str:
+        return f"Ruta no permitida: {self.reason.value}"
+
+
 class PortalUnavailable(RutCheckerError):
     """Mantenimiento, error 5xx o fallo de red en el canal."""
 
