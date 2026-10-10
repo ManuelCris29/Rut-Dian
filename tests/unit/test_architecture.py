@@ -169,3 +169,29 @@ def test_detector_allows_valid_imports(layer: str, module_name: str, source: str
 )
 def test_package_skeleton_exists(package: str) -> None:
     assert (SRC / package / "__init__.py").is_file()
+
+
+def _calls_get_logger(source: str) -> bool:
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name == "getLogger":
+                return True
+    return False
+
+
+def test_only_infra_logging_calls_get_logger() -> None:
+    allowed = SRC / "infra" / "logging.py"
+    offenders = [
+        str(path.relative_to(SRC))
+        for path in SRC.rglob("*.py")
+        if path != allowed and _calls_get_logger(path.read_text(encoding="utf-8"))
+    ]
+    assert not offenders, f"solo infra/logging.py puede llamar getLogger: {offenders}"
+
+
+def test_get_logger_detector() -> None:
+    assert _calls_get_logger("import logging\nlogging.getLogger('x')")
+    assert _calls_get_logger("from logging import getLogger\ngetLogger()")
+    assert not _calls_get_logger("def f(logger):\n    logger.info('x')")

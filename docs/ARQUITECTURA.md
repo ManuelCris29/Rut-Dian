@@ -201,6 +201,13 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 - `InvalidIdentification.reason` describe la regla incumplida ("contiene caracteres no numéricos",
   "longitud fuera de rango", "DV incorrecto") y **nunca** incluye el valor crudo (Obs-7).
 - [SUPUESTO] Longitudes: cédula 3–10 dígitos, NIT 9–10 sin DV (skill `validacion-identificacion`).
+- Espacios: al inicio/fin y alrededor del guion del DV son formato; entre dígitos solo como miles
+  bien agrupados (`1 000 000 001`) y sin `.`/`,`. El DV nunca se separa con espacio
+  (`900000001 7` → `ENTRADA_INVALIDA`, "contiene caracteres no numéricos").
+- **Posible NIT con DV pegado:** `validate_identification` marca `IdentificationInput.possible_glued_check_digit`
+  cuando la identificación tiene 10 dígitos, empieza por 8 o 9, no llegó DV y `calc_check_digit(n[:9]) == n[9]`.
+  No se adivina. `BatchQueryService` (T-35) debe enviar esas filas a `PENDIENTE_VALIDACION_MANUAL` con la
+  observación "posible NIT con DV pegado" **sin consultar la fuente**.
 
 ### 5.3 Salida (SPEC §5, exactamente estas columnas y en este orden)
 
@@ -450,10 +457,15 @@ circuito; copia ≤ 30 días; retención de snapshots 30 días; zona `America/Bo
   completo, nombre, razón social, `estado_rut`, responsable ni la observación libre.
 - Eventos: `run_started`, `row_finished`, `retry_scheduled`, `circuit_opened`, `challenge_detected`,
   `challenge_resolved`, `challenge_timeout`, `batch_stopped`, `export_failed`, `snapshot_saved`,
-  `purge_executed`, `run_finished`.
+  `purge_executed`, `run_finished`, `exception`. El catálogo es cerrado (`LogEvent`): cualquier otro
+  valor se registra como `unlisted_event` y el texto del mensaje nunca se copia al log. Los campos son
+  tipados y se descartan si no cumplen (`status` ∈ QueryStatus, `source` ∈ SourceKind, `counts` con claves
+  QueryStatus y enteros, `error_code` `[A-Z_]{1,40}`, `id_masked` solo `*`+≤4 dígitos). `configure_logging`
+  silencia `rut_checker` y `py.warnings` (NullHandler) y activa `captureWarnings` (silencia las
+  advertencias de todo el proceso; `close_logging` lo revierte al cerrar el último run); solo `infra/logging.py` llama `logging.getLogger`.
 - **Excepciones (Obs-3):** nunca se registra `str(exc)`, `repr(exc)` ni el traceback de una excepción de
   terceros; solo `error_code` y `error_class`. El formateador ignora `exc_info` y `stack_info`, y además
-  `MaskingFilter` los procesa por si alguien los activa. `typer.Typer(pretty_exceptions_show_locals=False)`.
+  `MaskingFilter` los elimina (`exc_info`, `exc_text`, `stack_info` = `None`) sin renderizarlos. `typer.Typer(pretty_exceptions_show_locals=False)`.
   Prohibido `DEBUG=pw:api`, tracing y video de Playwright.
 - **`MaskingFilter` (Obs-7):** reemplaza en mensaje, argumentos y texto de excepción cualquier secuencia que
   coincida con `\d[\d.,\s-]{4,}\d` (tolera `1.000.000.001`, `900 000 001-7`) por su versión enmascarada.

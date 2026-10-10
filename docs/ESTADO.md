@@ -40,6 +40,8 @@
 | 2026-10-09 | D-5: snapshot de diagnóstico ante ESTRUCTURA_CAMBIADA desactivado por defecto; si se activa, solo esqueleto estructural sin textos | ARQUITECTURA, excepciones.md |
 | 2026-10-09 | P-4: entrada = una columna con el número; DV opcional | ARQUITECTURA |
 | 2026-10-09 | Gherkin G9–G12 incorporados a criterios de aceptación | criterios-aceptacion.md |
+| 2026-10-09 | Espacios en la identificación solo como separador de miles bien agrupado; DV separado por espacio → ENTRADA_INVALIDA | revisión seguridad T-41 |
+| 2026-10-09 | 10 dígitos que empiezan por 8/9 sin DV y cuyo último dígito coincide con el DV de los 9 primeros → PENDIENTE_VALIDACION_MANUAL "posible NIT con DV pegado" (no se adivina, no se consulta) | revisión seguridad T-41 |
 
 ## Supuestos activos
 
@@ -82,6 +84,9 @@
 - Humano (opcional): ampliar `.claude/hooks/bloquear_evasion.py` con `ignore_default_args`, `add_init_script`, `extra_http_headers`, `ignore_https_errors`, `clear_cookies` (propuesta revisor-seguridad Fase 3).
 - Para T-38: `context.route` que aborte todo salvo localhost/file://; valorar cubrir `getaddrinfo` en el guard; pruebas `portal_real` con variable de opt-in explícita (revisor-seguridad).
 - Para T-37/T-40 (revisor-seguridad T-33): pruebas de `build_service` con `dian_portal` sin `RUT_PORTAL_ENABLED`, `fake` sin `RUT_ALLOW_FAKE`, y snapshot con fuente distinta del portal (valorar exigir `portal_enabled`). La CLI muestra si cargó `.env` y desde qué ruta (sin valores); T-60 documenta ejecutar desde la raíz.
+- Para T-40 (revisor-codigo T-43): `logging.lastResort = None` o NullHandler en el root al arrancar el CLI (Playwright/asyncio usan logging); prueba con capsys que un `getLogger("tercero").warning(id)` no sale por stderr.
+- Cuando exista el catálogo de códigos de error: validar `error_code` del log contra un StrEnum cerrado (hoy patrón `[A-Z_]{1,40}`) (revisor-seguridad O-2).
+- Para T-46/T-47: serializar solo las columnas de SPEC §5, nunca `model_dump()` completo (revisor-seguridad O-5).
 - Para T-43: `MaskingFilter` también sobre `record.exc_text`/`stack_info` y excepciones encadenadas (`__cause__` de Playwright); adaptadores con `from None` o solo `type(exc).__name__`; prueba con excepción encadenada que lleve un id.
 - Para T-46/T-40b: crear `output/` y `logs/` con permisos restringidos; aviso si la ruta está en OneDrive/Dropbox/Google Drive.
 - Para T-36 (servicio): pausa efectiva antes de reintento = max(min_delay, backoff).
@@ -104,3 +109,5 @@
 - 2026-10-09 — T-33 HECHA: Settings (pydantic-settings, valores seguros, triple llave: APPROVAL_REF con fecha real, URL https solo *.dian.gov.co:443 sin userinfo ni \, backoff ≥ 3 y ≥ max_retries), .env.example, aislamiento del .env real en pruebas; 157 pruebas; revisor-codigo APROBADO CON OBSERVACIONES; revisor-seguridad BLOQUEANTE (evasión de URL con \) → corregido → APROBADO CON OBSERVACIONES (desarrollador-python).
 - 2026-10-09 — T-42 HECHA: modelos de dominio frozen (InputRow, IdentificationInput, CopyEvidence, RutResult con invariantes estado↔fuente, QueryOutcome), regla de copia ≤ 30 días con CopyVerdict VALID/EXPIRED/FUTURE_DATE, errores de dominio en validadores before, repr enmascarado; 246 pruebas; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones. Deuda: model_dump expone datos reales → no volcar modelos a logs (T-43) (desarrollador-python).
 - 2026-10-09 — T-41 HECHA: validadores (normalización con agrupación de miles válida y decimal nulo .0/,00; sin espacios mezclados con . o ,; guiones Unicode; DV con stdnum solo si llega; todo-ceros rechazado; firma sin row_index); 396 pruebas; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones (2 hallazgos de identificación equivocada silenciosa corregidos). Deuda: regex _DIGITS duplicadas en models/validators (desarrollador-python).
+- 2026-10-09 — Corrección T-41 por revisor-seguridad (BLOQUEANTE: DV separado por espacio leído como otro número): espacios solo como miles bien agrupados; marca `possible_glued_check_digit` para NIT con DV pegado (decisiones del usuario); enmascarado cubre tab y `_` (desarrollador-python).
+- 2026-10-09 — T-43 HECHA: logging JSONL con eventos y campos cerrados (nunca texto libre ni excepciones), MaskingFilter, loggers del paquete y warnings silenciados, solo infra/logging.py usa getLogger; 515 pruebas; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones; revisor-seguridad APROBADO CON OBSERVACIONES (desarrollador-python).
