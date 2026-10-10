@@ -134,6 +134,10 @@ jobs:
       - name: Exportar requisitos desde uv.lock
         run: uv export --locked --all-extras --no-emit-project --no-hashes --output-file "$RUNNER_TEMP/requirements-audit.txt"
 
+      # Verificación T-31 (temporal): dependencia con CVE conocidas; pip-audit debe fallar.
+      - name: Inyectar dependencia vulnerable (verif)
+        run: echo "requests==2.19.0" >> "$RUNNER_TEMP/requirements-audit.txt"
+
       # Falla (código != 0) ante cualquier vulnerabilidad conocida.
       - name: pip-audit
         run: uv run pip-audit --requirement "$RUNNER_TEMP/requirements-audit.txt" --disable-pip --no-deps --strict
