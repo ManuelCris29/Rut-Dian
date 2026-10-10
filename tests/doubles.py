@@ -80,6 +80,16 @@ class FixedClock:
         return self._moment.astimezone(BOGOTA).date()
 
 
+class FakeSleeper:
+    """Doble de `Sleeper`: registra las esperas pedidas sin dormir de verdad."""
+
+    def __init__(self) -> None:
+        self.sleeps: list[float] = []
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+
+
 def assert_clock_contract(clock: "Clock") -> None:
     """Contrato de todo `Clock` (reutilizable para `SystemClock` en T-35)."""
     now = clock.now()

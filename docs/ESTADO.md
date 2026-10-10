@@ -42,6 +42,8 @@
 | 2026-10-09 | Gherkin G9–G12 incorporados a criterios de aceptación | criterios-aceptacion.md |
 | 2026-10-09 | Espacios en la identificación solo como separador de miles bien agrupado; DV separado por espacio → ENTRADA_INVALIDA | revisión seguridad T-41 |
 | 2026-10-09 | 10 dígitos que empiezan por 8/9 sin DV y cuyo último dígito coincide con el DV de los 9 primeros → PENDIENTE_VALIDACION_MANUAL "posible NIT con DV pegado" (no se adivina, no se consulta) | revisión seguridad T-41 |
+| 2026-10-09 | RN-05: duplicado = misma identificación + misma evidencia de copia + misma nota; nunca se hereda el resultado de una fila con evidencia distinta | revisión T-35 |
+| 2026-10-09 | Responsable de validación sin fecha de copia → ENTRADA_INVALIDA "responsable sin fecha de copia" | revisión T-35 |
 
 ## Supuestos activos
 
@@ -91,6 +93,8 @@
 - Para T-43: `MaskingFilter` también sobre `record.exc_text`/`stack_info` y excepciones encadenadas (`__cause__` de Playwright); adaptadores con `from None` o solo `type(exc).__name__`; prueba con excepción encadenada que lleve un id.
 - Para T-46/T-40b: crear `output/` y `logs/` con permisos restringidos; aviso si la ruta está en OneDrive/Dropbox/Google Drive.
 - Para T-36 (servicio): pausa efectiva antes de reintento = max(min_delay, backoff).
+- Para T-45 (revisor-seguridad T-35): 2 bloqueos seguidos o HumanInterventionRequired → preguntar al operador / detener (StopReason nuevos, nota "Lote detenido: verificación de seguridad no resuelta"); pausa mínima también antes de la primera llamada con ritmo de cada ejecución (o persistir la hora de la última consulta); devolver informe parcial si la política lanza.
+- **T-40 con `RUT_SOURCE=dian_portal` depende de T-45 HECHA** (sin T-45 los bloqueos repetidos no detienen el lote).
 
 ## Bitácora
 
@@ -115,3 +119,4 @@
 - 2026-10-09 — T-34 HECHA: puertos RutSourcePort/OperatorPort (Protocol, kind/paced solo lectura), FakeSource programable con fábricas de excepción (instancia nueva por llamada) y resultado por defecto marcado como ficticio, OperatorDouble con eventos cronológicos; 533 pruebas; revisor-codigo APROBADO CON OBSERVACIONES (aplicadas). Nota: la 1.ª entrega no verificó el paso rojo de TDD; las correcciones sí (desarrollador-python).
 - 2026-10-09 — T-39 HECHA: puerto Clock, ContingencySource y DocumentCopySource (C + F): copia ≤ 30 días → VALIDADA_COPIA_RUT; vencida/futura → PENDIENTE_VALIDACION_MANUAL con fuente CONTINGENCIA_MANUAL y nota del área conservada; columna fuente = RutResult.source; revisor-codigo APROBADO CON OBSERVACIONES (aplicadas) (desarrollador-python).
 - 2026-10-09 — T-36 HECHA: lector xlsx/csv perezoso con motivos cerrados (InvalidFileReason), reset_dimensions, anti-bomba zip (10 MB descomprimido, 5 MB por hoja/sharedStrings, ratio > 100), celdas ≤ 1001 caracteres, controles y bidi → U+FFFD, primera hoja visible, columnas duplicadas rechazadas, identificación numérica pasada sin convertir al dominio; 633 pruebas; revisor-codigo APROBADO CON OBSERVACIONES; revisor-seguridad BLOQUEANTE (filas perdidas por dimensión desactualizada) → corregido → APROBADO CON OBSERVACIONES (desarrollador-python).
+- 2026-10-09 — T-35 HECHA: BatchQueryService (validación, dedupe por identificación+evidencia+nota con fuentes locales y solo por identificación con fuente con ritmo, posible DV pegado a pendiente sin consultar, traducción excepción→estado en translation.py, parada segura sin texto, salvaguardas de reintento en el servicio: nunca reintentar intervención/bloqueo/estructura, tope 3, retrasos no finitos descartados; respaldo local obligatorio), SystemClock, Pacer; 697 pruebas, cobertura application 100 %; revisor-codigo APROBADO CON OBSERVACIONES tras 2 iteraciones; revisor-seguridad APROBADO CON OBSERVACIONES (M-2 bloqueos/operador y L-3 → T-45) (desarrollador-python).

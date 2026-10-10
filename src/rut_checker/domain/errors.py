@@ -36,6 +36,7 @@ class InvalidReason(StrEnum):
     UNREADABLE_COPY_DATE = "fecha de copia del RUT ilegible"
     INVALID_RESPONSIBLE = "responsable de validación inválido"
     OBSERVATION_TOO_LONG = "observación demasiado larga"
+    RESPONSIBLE_WITHOUT_COPY_DATE = "responsable sin fecha de copia"
 
 
 class InvalidIdentification(RutCheckerError):

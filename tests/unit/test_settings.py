@@ -223,3 +223,11 @@ def test_settings_are_immutable() -> None:
     settings = load()
     with pytest.raises(ValidationError):
         settings.max_retries = 1  # type: ignore[misc]  # asignación intencional a modelo frozen
+
+
+def test_max_retries_upper_bound_matches_service_attempt_cap() -> None:
+    """Amarre por prueba: infra no importa application, así que el tope se verifica aquí."""
+    from rut_checker.application.retry_policy import MAX_ATTEMPTS
+
+    upper = [m.le for m in Settings.model_fields["max_retries"].metadata if hasattr(m, "le")]
+    assert upper == [MAX_ATTEMPTS - 1]

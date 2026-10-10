@@ -133,8 +133,14 @@ src/rut_checker/
     clock.py                      # Clock(Protocol): now() aware y today() en America/Bogota
   application/
     clock.py                      # Sleeper (Protocol) + SystemClock (implementación de sistema, T-35)
-    retry_policy.py               # RetryPolicy: qué excepciones, cuántos intentos, backoff, umbrales de circuito
-    batch_service.py              # BatchQueryService
+    retry_policy.py               # RetryPolicy (Protocol) + NoRetry (T-35); la política real y el circuito son T-45
+    batch_service.py              # BatchQueryService + BatchSettings (Protocol: application no importa infra);
+                                  # único lugar de la traducción excepción -> QueryStatus
+    report.py                     # BatchReport, StopReason (STRUCTURE_CHANGED, UNEXPECTED_ERROR)
+    row_input.py                  # InputRow -> IdentificationInput (copia y nota)
+    row_results.py                # resultados pendientes, nota de parada, id enmascarado
+    run_log.py                    # RunLog: eventos del catálogo LogEvent con nombres literales (application no
+                                  # importa infra); una prueba exige EVENT_NAMES ⊆ LogEvent
   adapters/
     contingency_source.py
     document_copy_source.py
@@ -211,7 +217,8 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 - **Celdas numéricas de `identificacion`:** el lector las pasa sin convertir (`int`/`float`), porque `1.001`
   convertido a texto se leería como miles (1001). `validate_identification` rechaza los floats con decimales.
   El resto de columnas llegan como texto (float entero → sin `.0`; con decimales → `str` sin redondear).
-- `fecha_copia_rut` ilegible, responsable inválido u observación > 200 → fila `ENTRADA_INVALIDA` con motivo.
+- `fecha_copia_rut` ilegible, responsable inválido, **responsable sin `fecha_copia_rut`** (motivo cerrado
+  "responsable sin fecha de copia") u observación > 200 → fila `ENTRADA_INVALIDA` con motivo.
 - `InvalidIdentification.reason` describe la regla incumplida ("contiene caracteres no numéricos",
   "longitud fuera de rango", "DV incorrecto") y **nunca** incluye el valor crudo (Obs-7).
 - [SUPUESTO] Longitudes: cédula 3–10 dígitos, NIT 9–10 sin DV (skill `validacion-identificacion`).
@@ -232,7 +239,7 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 | `nombre_o_razon_social` | Solo `PORTAL_DIAN_C1` | **Vacío** en C (D-3) y F |
 | `estado_rut` | Solo `PORTAL_DIAN_C1`, texto tal cual lo muestre el portal (RN-03) | **Vacío** en C (D-3) y F; nunca se inventa |
 | `fecha_consulta` | `Clock.now()` en `America/Bogota`, ISO 8601 con desfase | Fecha de procesamiento de la fila |
-| `fuente` | Siempre `RutResult.source` (`SourceKind`); `RutSourcePort.kind` solo identifica al adaptador | RNF-04 |
+| `fuente` | Siempre `RutResult.source` (`SourceKind`); `RutSourcePort.kind` solo identifica al adaptador, salvo en filas con error traducido: allí es el canal intentado (`RutSourcePort.kind`), y `CONTINGENCIA_MANUAL` si ese canal es la fuente documental (no sugerir validación documental) | RNF-04 |
 | `estado_consulta` | `QueryStatus` | RF-08 |
 | `observacion` | Mensaje del catálogo + motivo; en C: "Validado contra copia del RUT de fecha AAAA-MM-DD; responsable: USR-001" + observación del área (también en copia vencida/futura; espacios colapsados, números largos enmascarados) | Sin id completo |
 
@@ -291,9 +298,16 @@ crudo ni el texto de una excepción de terceros (Obs-3, Obs-7):
 | `HumanInterventionRequired`, `AccessBlocked` | dian_portal | `REQUIERE_INTERVENCION_HUMANA` | **Nunca** | Bloqueo: 1.º pregunta al operador, 2.º seguido detiene |
 | `ExportError` | exporters | `ERROR_EXPORTACION` (nivel ejecución) | 1, nombre alternativo en `output/`; luego JSON de respaldo en `output/` | Código 3 |
 | `SourceNotEnabledError`, `SelectorsNotValidatedError`, `FakeNotAllowedError` | `build_service` | — (configuración) | No | Código 2, sin navegador ni red |
+| Fallo del respaldo (`fallback.query` lanza) | `BatchQueryService` | `PENDIENTE_VALIDACION_MANUAL`, fuente `CONTINGENCIA_MANUAL`, se registra `error_code=FALLBACK_FAILED` y la clase | No | El lote sigue |
 | Cualquier otra `Exception` en una fila | — | se registra solo `error_code=UNEXPECTED` y la clase; se trata como `StructureChanged` | No | Detiene el lote (parada segura) |
 
 - `SIN_RESULTADOS`, `EXITOSA`, `PENDIENTE_VALIDACION_MANUAL` y `VALIDADA_COPIA_RUT` llegan como `RutResult`.
+- **Salvaguardas del servicio (T-35):** `HumanInterventionRequired`, `AccessBlocked`, `StructureChanged`,
+  `InvalidIdentification` e `IncompleteResult` nunca se reintentan aunque la `RetryPolicy` lo pida; tope fijo de
+  3 intentos por fila; retrasos no finitos o negativos se ignoran. El respaldo debe ser local (`paced=False`, no
+  el portal). **Dedupe:** con fuente local, clave `(identificación, evidencia de copia, nota con espacios colapsados)`;
+  con `primary.paced` (portal) solo la identificación, porque copia y nota no cambian lo que devuelve el portal
+  (RF-11, ritmo responsable). `RUT_MAX_RETRIES` ≤ 2 = `MAX_ATTEMPTS - 1`, amarrado por prueba.
 - `ERROR_EXPORTACION` es de **ejecución**: las filas conservan su estado.
 - El ritmo (`RUT_MIN_DELAY_BETWEEN_QUERIES_S`) se aplica antes de cada llamada a una fuente con
   `paced=True`, incluidos los reintentos.

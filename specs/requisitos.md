@@ -58,7 +58,7 @@ flowchart TD
 | RN-02 | Se aceptan cédulas y NIT. Si se recibe NIT con DV, se valida el DV antes de consultar | [CONFIRMADO] tipo · [SUPUESTO] validación DV |
 | RN-03 | Estados válidos del RUT: los que muestre el canal oficial, sin reinterpretarlos | [PENDIENTE] Fase 2 (T-14) |
 | RN-04 | La revalidación se hace solo al vincular o renovar al tercero; el MVP no tiene periodicidad automática (D-2) | [CONFIRMADO] 2026-10-09 |
-| RN-05 | Duplicados en un lote se consultan una sola vez | [SUPUESTO] |
+| RN-05 | Duplicados en un lote (misma identificación, misma evidencia de copia y misma nota) se consultan una sola vez; con evidencia distinta se procesan por separado | [CONFIRMADO] 2026-10-09 |
 | RN-06 | Los resultados se conservan 1 año y luego se eliminan | [CONFIRMADO] 2026-10-09 |
 | RN-07 | Si el canal no está disponible y el tercero entregó copia del RUT, el operador puede validar contra ella (queda `VALIDADA_COPIA_RUT` con fecha del documento y responsable; D-1, 2026-10-09; nombre y estado no se transcriben, D-3). La copia debe tener ≤ 30 días; si es más antigua → `PENDIENTE_VALIDACION_MANUAL` con observación "copia vencida". El PDF no lo procesa la herramienta (ver INFORME-VIABILIDAD §8) | [CONFIRMADO] antigüedad ≤ 30 días (usuario, 2026-10-09) · la copia solo existe "a veces" |
 | RN-08 | Sin convenio institucional ni presupuesto para proveedor. Fuente: copia del RUT del tercero (≤ 30 días) + contingencia manual como base; portal público "Consulta Estado RUT" vía RPA asistido solo si se cumplen las condiciones de INFORME-VIABILIDAD.md | [CONFIRMADO] 2026-10-09 (modificada en Fase 2) |
