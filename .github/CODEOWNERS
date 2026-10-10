@@ -1,17 +1,15 @@
-# BORRADOR (T-31, Obs-1). Los propietarios los designa el humano responsable del repositorio.
-# Reemplace cada <<PROPIETARIO>> por @usuario o @org/equipo (con permiso de escritura)
-# y active en GitHub la regla de rama "Require review from Code Owners" para main.
-# Con el marcador sin reemplazar GitHub ignora la línea como inválida: no protege nada aún.
+# T-31 (Obs-1). Propietario designado por el responsable del repositorio (2026-10-10).
+# Para que tenga efecto, active en GitHub la regla de rama "Require review from Code Owners" para main.
 #
 # Estos archivos controlan qué se consulta, cómo se habilita el portal y qué dependencias
 # y guardarraíles se usan; todo cambio debe pasar por revisión del propietario.
 
-/config/selectors.yaml   <<PROPIETARIO>>
-/.env.example            <<PROPIETARIO>>
+/config/selectors.yaml   @ManuelCris29
+/.env.example            @ManuelCris29
 
 # Dependencias, guardas de pruebas, hooks/agentes y el propio pipeline.
-/pyproject.toml          <<PROPIETARIO>>
-/uv.lock                 <<PROPIETARIO>>
-/tests/conftest.py       <<PROPIETARIO>>
-/.claude/                <<PROPIETARIO>>
-/.github/                <<PROPIETARIO>>
+/pyproject.toml          @ManuelCris29
+/uv.lock                 @ManuelCris29
+/tests/conftest.py       @ManuelCris29
+/.claude/                @ManuelCris29
+/.github/                @ManuelCris29
