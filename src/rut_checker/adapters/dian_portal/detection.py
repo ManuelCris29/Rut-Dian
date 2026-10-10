@@ -16,8 +16,9 @@ Reglas de cumplimiento (CLAUDE.md §3):
 - Los errores de Playwright se traducen a dominio con mensaje genérico, sin `__cause__` ni
   `__context__`: su registro de llamadas puede contener la identificación consultada.
 
-Pendiente T-49: `TargetClosedError` (navegador o página cerrados por la persona) hoy se traduce a
-`PortalUnavailable`, que es transitorio y reintentable; no lo es. T-49 debe tratarlo aparte.
+`run_translated` traduce un navegador o página cerrados por la persona (`TargetClosedError`) a
+`PortalUnavailable`; `DianPortalSource` (T-49) lo reconoce por el estado del navegador y lo eleva a
+`HumanInterventionRequired`, que no se reintenta.
 """
 
 from collections.abc import Callable
@@ -51,6 +52,7 @@ __all__ = [
     "is_maintenance",
     "raise_for_kind",
     "run_translated",
+    "watch_specs",
 ]
 
 BLOCK_STATUSES = frozenset({403, 429})
@@ -101,13 +103,18 @@ def _any_visible(page: Page, specs: list[SelectorSpec]) -> bool:
 
 
 def _same_page(first: str, second: str) -> bool:
-    """Compara esquema, host y ruta (ignora consulta, fragmento y barra final)."""
+    """Compara esquema, host y ruta (ignora consulta, fragmento, barra final y `;jsessionid`)."""
     one, two = urlsplit(first), urlsplit(second)
-    return (one.scheme.lower(), one.netloc.lower(), one.path.rstrip("/")) == (
+    return (one.scheme.lower(), one.netloc.lower(), _plain_path(one.path)) == (
         two.scheme.lower(),
         two.netloc.lower(),
-        two.path.rstrip("/"),
+        _plain_path(two.path),
     )
+
+
+def _plain_path(path: str) -> str:
+    """Ruta sin parámetros de ruta (`;jsessionid=...` de cada segmento) ni barra final."""
+    return "/".join(segment.split(";", 1)[0] for segment in path.split("/")).rstrip("/")
 
 
 def _url_maintenance(
@@ -162,6 +169,13 @@ def _expected_specs(
         PageKind.FORM: selectors.form.id_input,
     }
     return [(kind, by_kind[kind]) for kind in _PRIORITY if kind in expected]
+
+
+def watch_specs(selectors: PortalSelectors, expected: frozenset[PageKind]) -> list[SelectorSpec]:
+    """Vigilado al esperar: elementos esperados, host del desafío y marcadores de bloqueo."""
+    detection = selectors.detection
+    specs = [spec for _, spec in _expected_specs(selectors, expected)]
+    return [*specs, *detection.challenge_markers, *detection.block_markers]
 
 
 def _expected_kind(
@@ -272,9 +286,7 @@ def check_page(
     if static is not None:
         return raise_for_kind(static)
     if timeout_ms > 0:
-        detection = selectors.detection
-        specs = [spec for _, spec in _expected_specs(selectors, expected)]
-        specs += [*detection.challenge_markers, *detection.block_markers]
+        specs = watch_specs(selectors, expected)
         # Agotar la espera no lanza: se reclasifica abajo (desafío/bloqueo ganan; si no se
         # reconoce nada, StructureChanged). QueryTimeout queda para goto, fill o carga.
         run_translated(lambda: wait_for_any_visible(page, specs, timeout_ms))

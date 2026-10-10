@@ -55,6 +55,7 @@ from rut_checker.domain.errors import ExportError, FakeNotAllowedError
 from rut_checker.domain.models import InputRow
 from rut_checker.domain.status import SourceKind
 from rut_checker.infra.logging import (
+    ChallengeLogSink,
     close_run_logging,
     configure_logging,
     log_exception,
@@ -93,22 +94,24 @@ def _copy_source(clock: Clock) -> RutSourcePort:
     return DocumentCopySource(ContingencySource(), clock)
 
 
-def _portal_source(settings: Settings, operator: OperatorPort, clock: Clock) -> RutSourcePort:
+def _portal_source(
+    settings: Settings, operator: OperatorPort, clock: Clock, sink: ChallengeLogSink
+) -> RutSourcePort:
     """Triple llave y adaptador del portal (import perezoso: nada de Playwright/yaml antes)."""
     from rut_checker.adapters.dian_portal.factory import create_portal_source
     from rut_checker.adapters.dian_portal.location import project_root
     from rut_checker.adapters.dian_portal.selectors import ensure_portal_enabled
 
-    if (
-        not settings.selectors_path.is_absolute()
-    ):  # I-3: la ruta relativa es de la raíz del proyecto
+    if not settings.selectors_path.is_absolute():  # I-3: ruta relativa = raíz del proyecto
         resolved = project_root() / settings.selectors_path
         settings = settings.model_copy(update={"selectors_path": resolved})
     enabled = ensure_portal_enabled(settings)
-    return create_portal_source(enabled, settings, operator, clock)
+    return create_portal_source(enabled, settings, operator, clock, sink)
 
 
-def _primary_source(settings: Settings, operator: OperatorPort, clock: Clock) -> RutSourcePort:
+def _primary_source(
+    settings: Settings, operator: OperatorPort, clock: Clock, sink: ChallengeLogSink
+) -> RutSourcePort:
     match settings.source:
         case "contingency":
             return _copy_source(clock)
@@ -117,7 +120,7 @@ def _primary_source(settings: Settings, operator: OperatorPort, clock: Clock) ->
                 raise FakeNotAllowedError
             return FakeSource()
         case "dian_portal":
-            return _portal_source(settings, operator, clock)
+            return _portal_source(settings, operator, clock, sink)
         case unreachable:
             assert_never(unreachable)
 
@@ -143,10 +146,12 @@ def build_service(
     """
     clock = SystemClock()
     operator = ConsoleOperator()
-    primary = _primary_source(settings, operator, clock)
+    sink = ChallengeLogSink()  # el logger se enlaza después de validar las carpetas
+    primary = _primary_source(settings, operator, clock, sink)
     try:
         prepare_run_dirs(settings, output_dir)
         logger = configure_logging(run_id or new_run_id(clock), settings.log_dir)
+        sink.bind(logger)
     except Exception:
         primary.close()
         raise

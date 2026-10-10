@@ -16,41 +16,34 @@ import threading
 from collections.abc import Callable, Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit
 
 import pytest
-from playwright.sync_api import (
-    Browser,
-    BrowserContext,
-    Page,
-    Request,
-    Route,
-    WebSocketRoute,
-    sync_playwright,
-)
+from doubles import OperatorDouble
+from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
 from playwright.sync_api import Error as PlaywrightError
-from portal_support import SELECTORS_FILE, SYNTHETIC_DIR, BrowserGuard
+from portal_support import (
+    HOST_RESOLVER_ARGS,
+    SELECTORS_FILE,
+    SYNTHETIC_DIR,
+    BrowserGuard,
+    install_browser_guard,
+)
+from source_support import Make, headless_guarded, make_settings
 
+from rut_checker.adapters.dian_portal.models import PortalSelectors
 from rut_checker.adapters.dian_portal.selectors import (
     EnabledPortal,
     enabled_portal_from_synthetic_fixture,
 )
+from rut_checker.adapters.dian_portal.source import DianPortalSource
 
-LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
-LOCAL_SCHEMES = frozenset({"about", "data", "file", "blob"})
 MAINTENANCE_IMAGE = "Mantenimiento-Consulta-RUT.jpg"
 # GIF 1x1 mínimo: contenido de la "imagen de mantenimiento" local.
 TINY_GIF = bytes.fromhex(
     "47494638396101000100800000000000ffffff21f90401000000002c00000000010001000002024401003b"
 )
-
-
-def is_local_url(url: str) -> bool:
-    """Indica si la URL es local (única permitida en el navegador de pruebas)."""
-    parts = urlsplit(url)
-    if parts.scheme in LOCAL_SCHEMES:
-        return True
-    return parts.scheme in {"http", "https", "ws", "wss"} and parts.hostname in LOCAL_HOSTS
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -117,12 +110,7 @@ def browser() -> Iterator[Browser]:
     """
     with sync_playwright() as playwright:
         try:
-            instance = playwright.chromium.launch(
-                headless=True,
-                args=[
-                    "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost"
-                ],
-            )
+            instance = playwright.chromium.launch(headless=True, args=HOST_RESOLVER_ARGS)
         except PlaywrightError:
             pytest.fail("Chromium no disponible. Ejecute: uv run playwright install chromium")
         try:
@@ -141,29 +129,7 @@ def context(browser: Browser, browser_guard: BrowserGuard) -> Iterator[BrowserCo
     """Contexto nuevo por prueba con el guard de red del navegador ya registrado."""
     ctx = browser.new_context(service_workers="block")
 
-    def guard(route: Route) -> None:
-        url = route.request.url
-        if is_local_url(url):
-            route.continue_()
-        else:
-            browser_guard.blocked.append(urlsplit(url).scheme)
-            route.abort()
-
-    def guard_websocket(ws: WebSocketRoute) -> None:
-        if is_local_url(ws.url):
-            ws.connect_to_server()
-        else:
-            # Sin `connect_to_server()` el WebSocket queda simulado en el navegador: no sale a la
-            # red. (`ws.close()` bloquea dentro del manejador con la API síncrona.)
-            browser_guard.blocked_websockets.append(urlsplit(ws.url).scheme)
-
-    def record_leak(request: Request) -> None:
-        if not is_local_url(request.url):
-            browser_guard.leaked.append(urlsplit(request.url).scheme)
-
-    ctx.route("**/*", guard)
-    ctx.route_web_socket("**/*", guard_websocket)
-    ctx.on("requestfinished", record_leak)  # una petición no local que termina es una fuga
+    install_browser_guard(ctx, browser_guard)
     try:
         yield ctx
     finally:
@@ -173,6 +139,11 @@ def context(browser: Browser, browser_guard: BrowserGuard) -> Iterator[BrowserCo
 @pytest.fixture
 def page(context: BrowserContext) -> Page:
     return context.new_page()
+
+
+@pytest.fixture
+def selectors(enabled_portal: EnabledPortal) -> PortalSelectors:
+    return enabled_portal.selectors
 
 
 @pytest.fixture(scope="session")
@@ -185,3 +156,36 @@ def enabled_portal() -> EnabledPortal:
 def fixture_url(local_server: str) -> Callable[[str], str]:
     """URL local de un fixture sintético por nombre de archivo."""
     return lambda name: f"{local_server}/html/{name}"
+
+
+@pytest.fixture
+def make_source(
+    local_server: str, enabled_portal: EnabledPortal, browser_guard: BrowserGuard
+) -> Iterator[Make]:
+    """Fábrica de fuentes sobre el servidor local; las cierra al terminar."""
+    created: list[DianPortalSource] = []
+
+    def make(
+        mode: str = "ok",
+        operator: OperatorDouble | None = None,
+        *,
+        challenge_s: int = 1,
+        path: str | None = None,
+        **kwargs: Any,
+    ) -> DianPortalSource:
+        url = f"{local_server}{path or f'/html/mecanismo_flujo.html?modo={mode}'}"
+        source = DianPortalSource(
+            enabled_portal,
+            make_settings(challenge_s),
+            operator or OperatorDouble(),
+            base_url=url,
+            launcher=headless_guarded,
+            **kwargs,
+        )
+        created.append(source)
+        install_browser_guard(source._context, browser_guard)
+        return source
+
+    yield make
+    for source in created:
+        source.close()

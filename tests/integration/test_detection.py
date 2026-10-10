@@ -6,50 +6,35 @@ pruebas no sustituyen G3/G4 con fixtures reales (T-48/T-51).
 
 import re
 import socket
-from collections.abc import Callable
 
 import pytest
-from playwright.sync_api import Page, Route
-from portal_support import SYNTHETIC_DIR, BrowserGuard
+from playwright.sync_api import Page
+from portal_support import (
+    SHORT_MS,
+    SYNTHETIC_DIR,
+    SYNTHETIC_HEADER,
+    WAIT_MS,
+    BrowserGuard,
+    UrlOf,
+)
 
 from rut_checker.adapters.dian_portal.detection import (
     PageKind,
     assert_structure,
     check_page,
     find_block,
-    find_challenge,
     inspect_page,
     is_maintenance,
     run_translated,
 )
 from rut_checker.adapters.dian_portal.locators import locate_unique
-from rut_checker.adapters.dian_portal.models import PortalSelectors, SelectorSpec
-from rut_checker.adapters.dian_portal.selectors import EnabledPortal
+from rut_checker.adapters.dian_portal.models import PortalSelectors
 from rut_checker.domain.errors import (
     AccessBlocked,
-    HumanInterventionRequired,
     PortalUnavailable,
     QueryTimeout,
     StructureChanged,
 )
-
-UrlOf = Callable[[str], str]
-SYNTHETIC_HEADER = "SINTÉTICO — no representa el portal de la DIAN"
-WAIT_MS = 5000
-SHORT_MS = 300
-
-
-@pytest.fixture
-def selectors(enabled_portal: EnabledPortal) -> PortalSelectors:
-    return enabled_portal.selectors
-
-
-def _with_block_marker(selectors: PortalSelectors) -> PortalSelectors:
-    marker = SelectorSpec(strategy="testid", value="bloqueo-sintetico")
-    detection = selectors.detection.model_copy(
-        update={"block_markers": [marker], "block_observed": None, "block_evidence": ""}
-    )
-    return selectors.model_copy(update={"detection": detection})
 
 
 def _with_url_marker(selectors: PortalSelectors, marker: str) -> PortalSelectors:
@@ -106,24 +91,6 @@ def test_http_5xx_is_unavailable(page: Page, local_server: str, selectors: Porta
     assert response is not None
     assert is_maintenance(page, response, selectors)
     with pytest.raises(PortalUnavailable):
-        check_page(page, response, selectors, timeout_ms=SHORT_MS)
-
-
-def test_challenge_served_with_5xx_is_a_challenge(
-    page: Page, fixture_url: UrlOf, selectors: PortalSelectors
-) -> None:
-    # Desviación documentada en ADR-0003: marcador de URL, desafío y después 5xx.
-    body = (SYNTHETIC_DIR / "mecanismo_desafio_sin_resolver.html").read_text(encoding="utf-8")
-
-    def serve_503(route: Route) -> None:
-        route.fulfill(status=503, content_type="text/html; charset=utf-8", body=body)
-
-    page.route("**/html/desafio_con_503.html", serve_503)
-    response = page.goto(fixture_url("desafio_con_503.html"))
-    assert response is not None
-    assert response.status == 503
-    assert inspect_page(page, response, selectors) is PageKind.CHALLENGE
-    with pytest.raises(HumanInterventionRequired):
         check_page(page, response, selectors, timeout_ms=SHORT_MS)
 
 
@@ -238,14 +205,6 @@ def test_late_result_is_awaited_passively(
     assert kind is PageKind.RESULT
 
 
-def test_late_challenge_is_a_challenge_not_a_timeout_nor_structure_error(
-    page: Page, fixture_url: UrlOf, selectors: PortalSelectors
-) -> None:
-    response = page.goto(fixture_url("mecanismo_desafio_tardio.html"))
-    with pytest.raises(HumanInterventionRequired):
-        check_page(page, response, selectors, timeout_ms=WAIT_MS)
-
-
 def test_presence_uses_any_visible_match_not_only_the_first(
     page: Page, fixture_url: UrlOf, selectors: PortalSelectors
 ) -> None:
@@ -261,15 +220,6 @@ def test_wait_ignores_hidden_first_match(
     assert check_page(page, response, selectors, timeout_ms=WAIT_MS) is PageKind.RESULT
 
 
-def test_challenge_still_wins_when_reclassifying_after_the_wait(
-    page: Page, fixture_url: UrlOf, selectors: PortalSelectors
-) -> None:
-    response = page.goto(fixture_url("mecanismo_desafio_sin_resolver.html"))
-    only_results = frozenset({PageKind.RESULT, PageKind.NO_RESULT})
-    with pytest.raises(HumanInterventionRequired):
-        check_page(page, response, selectors, timeout_ms=SHORT_MS, expected=only_results)
-
-
 def test_locate_unique_rejects_multiple_matches(
     page: Page, fixture_url: UrlOf, selectors: PortalSelectors
 ) -> None:
@@ -280,66 +230,6 @@ def test_locate_unique_rejects_multiple_matches(
     assert locate_unique(page, selectors.result.status).is_visible()
     with pytest.raises(StructureChanged):  # cero coincidencias
         locate_unique(page, selectors.form.id_input)
-
-
-def test_synthetic_challenge_host_is_detected(
-    page: Page, fixture_url: UrlOf, selectors: PortalSelectors
-) -> None:
-    response = page.goto(fixture_url("mecanismo_desafio_sin_resolver.html"))
-    assert find_challenge(page, selectors)
-    assert inspect_page(page, response, selectors) is PageKind.CHALLENGE
-    with pytest.raises(HumanInterventionRequired):
-        check_page(page, response, selectors, timeout_ms=SHORT_MS)
-
-
-def test_detection_never_interacts_with_the_challenge(
-    page: Page, fixture_url: UrlOf, selectors: PortalSelectors
-) -> None:
-    response = page.goto(fixture_url("mecanismo_desafio_sin_resolver.html"))
-    for _ in range(3):
-        assert inspect_page(page, response, selectors) is PageKind.CHALLENGE
-    with pytest.raises(HumanInterventionRequired):
-        check_page(page, response, selectors, timeout_ms=SHORT_MS)
-    assert page.evaluate("window.__eventosDesafio") == []  # registro de clics/foco/entrada
-
-
-def test_challenge_is_checked_before_block_status(
-    page: Page, fixture_url: UrlOf, selectors: PortalSelectors
-) -> None:
-    # Orden ADR-0003: un desafío servido con 403 sigue siendo desafío, no bloqueo.
-    body = (SYNTHETIC_DIR / "mecanismo_desafio_sin_resolver.html").read_text(encoding="utf-8")
-
-    def serve_403(route: Route) -> None:
-        route.fulfill(status=403, content_type="text/html; charset=utf-8", body=body)
-
-    page.route("**/html/otro_desafio.html", serve_403)
-    response = page.goto(fixture_url("otro_desafio.html"))
-    assert response is not None
-    assert response.status == 403
-    assert inspect_page(page, response, selectors) is PageKind.CHALLENGE
-
-
-def test_resolved_challenge_lets_the_form_appear(
-    page: Page, fixture_url: UrlOf, selectors: PortalSelectors
-) -> None:
-    page.goto(fixture_url("mecanismo_desafio_resuelto.html"))
-    assert find_challenge(page, selectors)
-    # La persona "resuelve" el desafío: la prueba dispara la función, sin tocar el desafío.
-    page.evaluate("window.__resolverSintetico()")
-    page.get_by_test_id("campo-id-sintetico").wait_for(state="visible", timeout=WAIT_MS)  # pasivo
-    assert not find_challenge(page, selectors)
-    assert assert_structure(page, selectors) is PageKind.FORM
-
-
-def test_block_markers_are_detected_when_configured(
-    page: Page, fixture_url: UrlOf, selectors: PortalSelectors
-) -> None:
-    response = page.goto(fixture_url("mecanismo_bloqueo.html"))
-    assert not find_block(page, response, selectors)  # sin marcadores configurados
-    with_marker = _with_block_marker(selectors)
-    assert find_block(page, response, with_marker)
-    with pytest.raises(AccessBlocked):
-        check_page(page, response, with_marker, timeout_ms=SHORT_MS)
 
 
 def test_playwright_timeout_in_fill_becomes_generic_query_timeout(
@@ -359,7 +249,7 @@ def test_playwright_timeout_in_fill_becomes_generic_query_timeout(
 
 def test_synthetic_fixtures_have_header_and_no_vendor_markers() -> None:
     files = sorted(SYNTHETIC_DIR.glob("mecanismo_*.html"))
-    assert len(files) == 12
+    assert len(files) == 13
     forbidden = ("cf-turnstile", "g-recaptcha", "recaptcha", "turnstile", "cloudflare", "dian")
     for path in files:
         text = path.read_text(encoding="utf-8")

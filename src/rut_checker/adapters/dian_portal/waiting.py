@@ -30,3 +30,25 @@ def wait_for_any_visible(page: Page, specs: list[SelectorSpec], timeout_ms: int)
     except PlaywrightTimeoutError:
         return False
     return True
+
+
+def wait_until_none_visible(page: Page, specs: list[SelectorSpec], timeout_ms: int) -> bool:
+    """Espera pasivamente a que NINGUNA coincidencia de `specs` siga visible en el DOM principal.
+
+    Solo `wait_for(state="hidden")` sobre el elemento host: sin clics, foco ni lectura del interior.
+    Un elemento ausente o fuera del DOM cuenta como oculto.
+
+    Returns:
+        `True` si desapareció; `False` si se agotó `timeout_ms` (el desafío sigue ahí). Otros
+        errores de Playwright (p. ej. página cerrada) se propagan para `run_translated`.
+    """
+    if not specs:
+        return True
+    combined: Locator = locate(page, specs[0])
+    for spec in specs[1:]:
+        combined = combined.or_(locate(page, spec))
+    try:
+        combined.filter(visible=True).first.wait_for(state="hidden", timeout=timeout_ms)
+    except PlaywrightTimeoutError:
+        return False
+    return True

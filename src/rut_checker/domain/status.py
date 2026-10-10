@@ -33,3 +33,14 @@ class SourceKind(StrEnum):
     CONTINGENCIA_MANUAL = "CONTINGENCIA_MANUAL"
     SIN_CONSULTA = "SIN_CONSULTA"
     FAKE = "FAKE"
+
+
+class ChallengeEvent(StrEnum):
+    """Hitos de la pausa asistida ante un desafío de seguridad (ADR-0003 §3).
+
+    Los valores coinciden con los eventos `challenge_*` del catálogo de log (`LogEvent`).
+    """
+
+    DETECTED = "challenge_detected"
+    RESOLVED = "challenge_resolved"
+    TIMEOUT = "challenge_timeout"

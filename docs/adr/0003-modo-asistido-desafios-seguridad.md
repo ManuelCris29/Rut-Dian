@@ -110,6 +110,26 @@ frame del desafío.
 Navegador: `chromium.launch(headless=False)` obligatorio cuando `RUT_SOURCE=dian_portal`.
 El adaptador (T-48/T-49) fija `headless=False` en código; no lo toma de `RUT_HEADLESS` (que además `ensure_portal_enabled` exige en `false`).
 
+**Implementación T-49 (`adapters/dian_portal/source.py`, `assisted_wait.py`, `form_flow.py`):** el aviso
+usa solo `OperatorPort.notify` (sin número de fila ni identificación: el adaptador no conoce la
+fila). La espera es pasiva (`wait_for(state="hidden")` sobre el host, con `RUT_HUMAN_CHALLENGE_TIMEOUT_S`);
+si el host se oculta y reaparece dentro del plazo se sigue esperando con el tiempo restante, sin nuevo
+aviso (una sola pausa por consulta). La reclasificación posterior ignora la respuesta HTTP vieja (un
+desafío servido con 403 y resuelto en el sitio no cuenta como bloqueo).
+
+**Eventos (§3.1, §3.4, §3.5, RF-07, R-02).** El adaptador no usa loggers: recibe un recolector
+`on_challenge(ChallengeEvent, ms)` con `ChallengeEvent` cerrado (`DETECTED`, `RESOLVED`, `TIMEOUT`).
+`build_service` crea un `infra.logging.ChallengeLogSink`, lo pasa por la fábrica y lo enlaza al logger
+de la ejecución; escribe `challenge_detected` (ms 0), `challenge_resolved` y `challenge_timeout` con
+solo `duration_ms`. **Limitación aceptada:** los eventos no llevan `row_index` ni `id_masked` (la fuente
+no conoce la fila y el puerto `RutSourcePort.query` no la recibe); en el JSONL preceden al
+`row_finished` de su fila, y de ahí se correlacionan.
+
+**Aislamiento de las pruebas.** Las pruebas inyectan un `launcher` headless en el constructor de
+`DianPortalSource`; el literal `headless=False` vive solo en `launch_visible`. La prueba de
+arquitectura exige que solo `factory.py` construya la fuente y sin esos parámetros de prueba, y que el
+contexto se cree con `accept_downloads=False`.
+
 **Prueba de arquitectura** (`ast`, T-30 crea la base y T-49 la extiende): falla si en
 `src/rut_checker/adapters/dian_portal/` aparecen `user_agent`, `proxy`, `args`, `ignore_default_args`,
 `add_init_script`, `extra_http_headers`, `route` (en código de producción), `ignore_https_errors`,

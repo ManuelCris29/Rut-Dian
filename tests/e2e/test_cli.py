@@ -39,7 +39,7 @@ from rut_checker.domain.errors import (
 )
 from rut_checker.domain.models import IdentificationInput, RutResult
 from rut_checker.domain.status import QueryStatus, SourceKind
-from rut_checker.infra.logging import close_run_logging
+from rut_checker.infra.logging import ChallengeLogSink, close_run_logging
 from rut_checker.infra.paths import assert_safe_dir, ensure_private_dir
 from rut_checker.infra.settings import Settings
 from rut_checker.io.exporters import ExportKind, ExportReport
@@ -204,17 +204,17 @@ def test_dian_portal_with_unvalidated_selectors_exits_2(
     assert not (workspace / "logs").exists()
 
 
-def test_dian_portal_adapter_pending_exits_2(
+def test_dian_portal_requires_the_enabled_portal_token_exits_2(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Con las llaves en regla pero sin `DianPortalSource` (T-48/T-49) la CLI no degrada."""
+    """`DianPortalSource` (T-49) solo acepta `EnabledPortal`: sin él la CLI no degrada."""
     monkeypatch.setenv("RUT_SOURCE", "dian_portal")
     monkeypatch.setenv("RUT_PORTAL_ENABLED", "true")
     monkeypatch.setenv("RUT_PORTAL_APPROVAL_REF", APPROVAL)
     monkeypatch.setattr(PORTAL_GATE, lambda _settings: object())
     result = _lote(_write_batch(workspace, [ID_1]))
     assert result.exit_code == 2
-    assert SourceNotEnabledReason.PORTAL_ADAPTER_PENDING.value in result.stderr
+    assert SourceNotEnabledReason.NOT_ENABLED_PORTAL.value in result.stderr
     assert not (workspace / "logs").exists()
 
 
@@ -364,6 +364,8 @@ def test_dian_portal_wiring_passes_gate_result_settings_and_operator(
     assert received[0] is enabled
     assert isinstance(received[1], Settings)
     assert isinstance(received[2], ConsoleOperator)
+    assert isinstance(received[4], ChallengeLogSink)  # recolector de desafíos ya enlazado al log
+    assert received[4]._logger is not None
     assert isinstance(service._retry_policy, BackoffRetryPolicy)
 
 

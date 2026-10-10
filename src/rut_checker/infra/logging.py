@@ -29,7 +29,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Final
 
-from rut_checker.domain.status import SourceKind
+from rut_checker.domain.status import ChallengeEvent, SourceKind
 from rut_checker.infra.log_format import (
     ERROR_CODE,
     JsonlFormatter,
@@ -39,6 +39,7 @@ from rut_checker.infra.log_format import (
 )
 
 __all__ = [
+    "ChallengeLogSink",
     "JsonlFormatter",
     "LogEvent",
     "MaskingFilter",
@@ -218,6 +219,29 @@ def log_purge_executed(
             "source": source,
         },
     )
+
+
+class ChallengeLogSink:
+    """Recolector de eventos de desafío que los escribe en el log de la ejecución.
+
+    El adaptador del portal se crea antes que el logger, así que el sumidero se enlaza después
+    (`bind`). Solo emite el evento cerrado y `duration_ms`: nunca identificación ni texto libre.
+    El adaptador desconoce la fila en curso; el evento precede al `row_finished` de su fila.
+    """
+
+    def __init__(self) -> None:
+        self._logger: logging.Logger | None = None
+
+    def bind(self, logger: logging.Logger) -> None:
+        """Enlaza el logger de la ejecución."""
+        self._logger = logger
+
+    def __call__(self, event: ChallengeEvent, duration_ms: int) -> None:
+        if self._logger is None:
+            return
+        name = LogEvent(event.value)
+        level = logging.WARNING if event is ChallengeEvent.TIMEOUT else logging.INFO
+        self._logger.log(level, name.value, extra={"event": name, "duration_ms": duration_ms})
 
 
 def close_run_logging(run_id: str) -> None:

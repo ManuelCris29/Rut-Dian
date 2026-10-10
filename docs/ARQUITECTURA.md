@@ -316,10 +316,13 @@ crudo ni el texto de una excepción de terceros (Obs-3, Obs-7):
 | Fallo del respaldo (`fallback.query` lanza) | `BatchQueryService` | `PENDIENTE_VALIDACION_MANUAL`, fuente `CONTINGENCIA_MANUAL`, se registra `error_code=FALLBACK_FAILED` y la clase | No | El lote sigue |
 | Cualquier otra `Exception` en una fila | — | se registra solo `error_code=UNEXPECTED` y la clase; se trata como `StructureChanged` | No | Detiene el lote (parada segura) |
 
-> **Pendiente T-49 (`TargetClosedError`):** hoy `detection.run_translated` traduce cualquier `Error`
-> de Playwright que no sea `TimeoutError` a `PortalUnavailable` (transitorio, reintentable). Un
-> navegador o página cerrados por la persona no es transitorio: T-49 debe tratarlo aparte (detener
-> el lote) y no reintentar.
+> **`TargetClosedError` (T-49):** `detection.run_translated` traduce cualquier `Error` de Playwright
+> que no sea `TimeoutError` a `PortalUnavailable`. `DianPortalSource.query` comprueba después, con
+> API pública (`page.is_closed()`, `browser.is_connected()`), si la persona cerró la página o el
+> navegador; en ese caso lanza `HumanInterventionRequired` (que `NEVER_RETRY` cubre): cuenta como
+> bloqueo, el 1.º pregunta al operador y el 2.º seguido detiene el lote. No se abre página nueva
+> (solo `SessionExpired` lo hace). Se descartó `PortalUnavailable` (reintentable, sin sentido sin
+> navegador) y `StructureChanged` (falsearía `ESTRUCTURA_CAMBIADA`).
 
 - `SIN_RESULTADOS`, `EXITOSA`, `PENDIENTE_VALIDACION_MANUAL` y `VALIDADA_COPIA_RUT` llegan como `RutResult`.
 - **Salvaguardas del servicio (T-35):** `HumanInterventionRequired`, `AccessBlocked`, `StructureChanged`,

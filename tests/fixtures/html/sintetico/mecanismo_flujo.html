@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<!-- SINTÉTICO — no representa el portal de la DIAN -->
+<html lang="es">
+<head><meta charset="utf-8"><title>Flujo sintetico</title></head>
+<body>
+<p data-testid="cabecera-sintetico">SINTÉTICO — no representa el portal de la DIAN</p>
+<!-- Fixture de MECANISMO (T-49, D-4): el parámetro ?modo= elige el comportamiento. -->
+<div data-testid="desafio-sintetico" id="desafio" tabindex="0" hidden
+     style="width:200px;height:60px;border:1px solid #888">Desafío sintético</div>
+<div id="formulario" hidden>
+  <input type="text" id="campo" data-testid="campo-id-sintetico" aria-label="Identificación sintética">
+  <button type="button" id="enviar" data-testid="boton-enviar-sintetico">Enviar</button>
+</div>
+<div id="resultado" hidden></div>
+<script>
+  const modo = new URLSearchParams(location.search).get("modo") || "ok";
+  const porId = (id) => document.getElementById(id);
+  const mostrar = (id, visible) => { porId(id).hidden = !visible; };
+
+  document.cookie = "sesion_sintetica=1; path=/";
+  window.__eventosDesafio = [];  // la prueba exige que quede vacío (el mecanismo es pasivo)
+  window.__envios = [];          // valores enviados por el formulario
+  const TIPOS = ["click", "dblclick", "mousedown", "mouseup", "mouseover", "pointerdown",
+                 "focus", "focusin", "keydown", "keyup", "input", "change"];
+  for (const tipo of TIPOS) {
+    porId("desafio").addEventListener(tipo, () => window.__eventosDesafio.push(tipo), true);
+  }
+
+  const FILAS = {
+    ok: [["nombre-sintetico", "PERSONA FICTICIA UNO"], ["estado-sintetico", "ESTADO-SINTETICO"],
+         [null, "Dato adicional: EXTRA-SINTETICO"]],
+    sin: [["sin-resultado-sintetico", "Sin resultado sintético"]],
+    sin_nombre: [["estado-sintetico", "ESTADO-SINTETICO"]],
+    estado_vacio: [["estado-sintetico", " "]],
+    sin_estado: [["nombre-sintetico", "PERSONA FICTICIA UNO"]],
+    estado_duplicado: [["estado-sintetico", "ESTADO-SINTETICO"], ["estado-sintetico", "OTRO"]],
+  };
+
+  function pintar(filas) {
+    const contenedor = porId("resultado");
+    contenedor.replaceChildren();
+    for (const [testid, texto] of filas) {
+      const parrafo = document.createElement("p");
+      if (testid) { parrafo.dataset.testid = testid; }
+      parrafo.textContent = texto;
+      contenedor.append(parrafo);
+    }
+    mostrar("formulario", false);
+    mostrar("resultado", true);
+  }
+
+  const conDesafioInicial = ["desafio_inicial", "desafio_doble", "desafio_intermitente"].includes(modo);
+  const conDesafioAlEnviar = modo === "desafio_enviar" || modo === "desafio_doble";
+  mostrar("desafio", conDesafioInicial);
+  mostrar("formulario", !conDesafioInicial);
+
+  porId("enviar").addEventListener("click", () => {
+    window.__envios.push(porId("campo").value);
+    if (conDesafioAlEnviar) {
+      mostrar("formulario", false);
+      mostrar("desafio", true);
+    } else {
+      pintar(FILAS[modo] || FILAS.ok);
+    }
+  });
+
+  // Modo desafio_intermitente: el desafío se oculta y reaparece a los 300 ms (antes de resolverse).
+  window.__ocultarYVolver = () => {
+    mostrar("desafio", false);
+    setTimeout(() => mostrar("desafio", true), 300);
+  };
+
+  // La prueba simula que una persona resolvió el desafío llamando a esta función (sin tocarlo).
+  window.__resolverSintetico = () => {
+    mostrar("desafio", false);
+    if (window.__envios.length === 0) { mostrar("formulario", true); } else { pintar(FILAS.ok); }
+  };
+</script>
+</body>
+</html>

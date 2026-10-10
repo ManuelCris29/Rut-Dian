@@ -165,7 +165,8 @@ class SourceNotEnabledReason(StrEnum):
     MISSING_APPROVAL_REF = "falta una referencia de aprobación válida"
     INVALID_URL = "la URL del portal no es válida"
     HEADLESS_NOT_ALLOWED = "el navegador del portal debe ser visible"
-    PORTAL_ADAPTER_PENDING = "el adaptador del portal aún no está disponible"
+    NOT_ENABLED_PORTAL = "el adaptador del portal exige la verificación de la triple llave"
+    SYNTHETIC_NOT_LOCAL = "los selectores sintéticos solo se usan con un servidor local"
 
 
 class SourceNotEnabledError(RutCheckerError):
