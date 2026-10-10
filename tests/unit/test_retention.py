@@ -361,3 +361,41 @@ def test_purge_skips_symlinks_and_keeps_target(tmp_path: Path) -> None:
     result = purge([link], within=[root])
     assert (result.deleted, result.failed) == (0, 1)
     assert target.exists()
+
+
+RESULT_NAMES = [
+    "resultado_{r}.xlsx",
+    "resultado_{r}_1.xlsx",
+    "resultado_{r}.json",
+    "resultado_{r}_1.json",
+    "resultado_{r}.csv",
+    "resultado_{r}_1.csv",
+]
+
+
+@pytest.mark.parametrize("template", RESULT_NAMES)
+def test_every_result_name_is_selected_by_source_and_expired_by_age(
+    template: str, tmp_path: Path
+) -> None:
+    """T-47 M-1: CSV y JSON alternativos también son `resultado` (mitigación R-15)."""
+    output, logs = tmp_path / "output", tmp_path / "logs"
+    _run_log(logs, PORTAL_RUN, PORTAL, NOW - timedelta(days=1))
+    by_source = _touch(output / template.format(r=PORTAL_RUN), NOW - timedelta(days=1))
+    by_age = _touch(output / template.format(r=OLD_RUN))
+    assert file_kind(by_source) is FileKind.RESULT
+    assert find_expired([output, logs], NOW, PORTAL) == [
+        by_source,
+        logs / f"run_{PORTAL_RUN}.jsonl",
+    ]
+    assert find_expired([output], NOW) == [by_age]
+    roots = [(Folder.OUTPUT, output)]
+    assert count_by_bucket([by_source], roots) == {"output.resultado": 1}
+
+
+@pytest.mark.parametrize("ext", ["csv", "json", "xlsx"])
+@pytest.mark.parametrize("suffix", ["", "_1"])
+def test_temp_files_of_every_format_are_temp(ext: str, suffix: str, tmp_path: Path) -> None:
+    name = f".resultado_{OLD_RUN}{suffix}.tmp.{ext}"
+    stale = _touch(tmp_path / name, NOW - timedelta(days=2))
+    assert file_kind(stale) is FileKind.TEMP
+    assert find_expired([tmp_path], NOW) == [stale]

@@ -23,8 +23,6 @@ from typer._click.core import Command, Context
 from typer._click.exceptions import MissingParameter, NoArgsIsHelpError, UsageError
 from typer.core import TyperCommand, TyperGroup
 
-from rut_checker.application.report import BatchReport
-from rut_checker.application.row_results import masked_id
 from rut_checker.domain.errors import (
     ExportError,
     FakeNotAllowedError,
@@ -33,11 +31,9 @@ from rut_checker.domain.errors import (
     SourceNotEnabledError,
     UnsafePathError,
 )
-from rut_checker.domain.status import QueryStatus
 from rut_checker.infra.paths import assert_safe_dir, ensure_private_dir, is_synced_folder
 from rut_checker.infra.retention import find_expired
 from rut_checker.infra.settings import Settings
-from rut_checker.io.exporters import ExportKind, ExportReport
 from rut_checker.ports.clock import Clock
 
 EXIT_OK: Final = 0
@@ -165,57 +161,6 @@ def announce_environment(settings: Settings, clock: Clock) -> None:
             f"Hay {len(expired)} archivos con más de {settings.retention_days} días: "
             "ejecute `rut-checker purgar`"
         )
-
-
-# --- resumen y código de salida ------------------------------------------------------------
-
-
-def _count_lines(report: BatchReport) -> list[str]:
-    counts = report.counts
-    return [f"  {status.value}: {counts[status]}" for status in QueryStatus if status in counts]
-
-
-def render_summary(report: BatchReport, export: ExportReport | None, run_id: str) -> None:
-    """Resumen en consola: conteos por estado, parada y ruta del archivo (sin ids)."""
-    typer.echo(f"Ejecución {run_id}: {len(report.outcomes)} filas")
-    for line in _count_lines(report):
-        typer.echo(line)
-    if report.stop_reason is not None:
-        typer.echo(
-            f"Lote detenido ({report.stop_reason.value}): las filas restantes quedaron "
-            "pendientes de validación manual."
-        )
-    if export is None:
-        return
-    if export.kind is ExportKind.JSON_BACKUP:
-        echo_err(
-            f"No se pudo escribir el Excel: se guardó un respaldo JSON en {export.path}. "
-            "Revise que el archivo no esté abierto."
-        )
-    elif export.kind is ExportKind.XLSX_ALTERNATIVE:
-        typer.echo(f"El archivo previsto estaba en uso; Excel escrito en {export.path}")
-    else:
-        typer.echo(f"Excel: {export.path}")
-
-
-def render_single_row(report: BatchReport) -> None:
-    """Línea por fila (solo para `consultar`): id enmascarado, estado y fuente."""
-    for outcome in report.outcomes:
-        shown = masked_id(outcome.row, outcome.identification) or "(sin número)"
-        result = outcome.result
-        typer.echo(
-            f"Fila {outcome.row.row_index + 1}: {shown} -> {result.status.value} "
-            f"[{result.source.value}]"
-        )
-
-
-def exit_code(report: BatchReport, export: ExportReport, *, single: bool = False) -> int:
-    """3 sin Excel (respaldo JSON); 2 si `consultar` recibió un número inválido; 1 si se detuvo."""
-    if export.kind is ExportKind.JSON_BACKUP:
-        return EXIT_EXPORT
-    if single and report.counts.get(QueryStatus.ENTRADA_INVALIDA):
-        return EXIT_INPUT
-    return EXIT_STOPPED if report.stopped else EXIT_OK
 
 
 # --- errores -------------------------------------------------------------------------------

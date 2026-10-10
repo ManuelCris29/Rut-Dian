@@ -19,6 +19,7 @@ Reglas:
 """
 
 import contextlib
+import csv
 import json
 import os
 import re
@@ -53,16 +54,31 @@ _REPLACEMENT = "�"
 # Controles C0 (salvo \t, \n, \r), surrogates sueltos y los no-caracteres U+FFFE/U+FFFF:
 # el XML del .xlsx no los admite y un surrogate suelto no se codifica en UTF-8 (JSON).
 _ILLEGAL_TEXT = re.compile("[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\ud800-\\udfff\\ufffe\\uffff]")
-_Row = tuple[str, ...]
-_Writer = Callable[[list[_Row], Path], None]
+Row = tuple[str, ...]
+Writer = Callable[[list[Row], Path], None]
+
+
+class OutputFormat(StrEnum):
+    """Formato pedido con `--formato`; el valor es también la extensión del archivo."""
+
+    XLSX = "xlsx"
+    JSON = "json"
+    CSV = "csv"
 
 
 class ExportKind(StrEnum):
-    """Qué se escribió realmente; la CLI sale con código 3 si fue `JSON_BACKUP`."""
+    """Qué se escribió realmente; la CLI sale con código 3 si fue `JSON_BACKUP`.
+
+    `CSV`/`JSON` (y sus `_ALTERNATIVE`) los produce `flat_exporters` (T-47).
+    """
 
     XLSX = "XLSX"
     XLSX_ALTERNATIVE = "XLSX_ALTERNATIVE"
     JSON_BACKUP = "JSON_BACKUP"
+    CSV = "CSV"
+    CSV_ALTERNATIVE = "CSV_ALTERNATIVE"
+    JSON = "JSON"
+    JSON_ALTERNATIVE = "JSON_ALTERNATIVE"
 
 
 @dataclass(frozen=True)
@@ -104,7 +120,17 @@ def _identification_and_dv(outcome: QueryOutcome) -> tuple[str, str]:
     return _raw_text(outcome.row.raw_identification), outcome.row.raw_dv or ""
 
 
-def _build_row(outcome: QueryOutcome) -> _Row:
+def sanitize_cell(value: str) -> str:
+    """Versión pública de `_sanitize` (la usan los exportadores planos de T-47)."""
+    return _sanitize(value)
+
+
+def build_row(outcome: QueryOutcome, cell: Callable[[str], str] = _cell_text) -> Row:
+    """Las 8 columnas de SPEC §5 de un desenlace, cada valor transformado con `cell`.
+
+    Es la única fuente de los valores exportados (Excel, CSV y JSON): fecha en Bogotá y nota
+    del área ausente en filas inválidas.
+    """
     identification, dv = _identification_and_dv(outcome)
     result = outcome.result
     queried_at = outcome.queried_at.astimezone(_BOGOTA)
@@ -118,10 +144,10 @@ def _build_row(outcome: QueryOutcome) -> _Row:
         result.status.value,
         result.observation,
     )
-    return tuple(_cell_text(value) for value in values)
+    return tuple(cell(value) for value in values)
 
 
-def _write_workbook(rows: list[_Row], path: Path) -> None:
+def _write_workbook(rows: list[Row], path: Path) -> None:
     workbook = Workbook()
     sheet = workbook.active
     if sheet is None:  # pragma: no cover - un Workbook nuevo siempre trae hoja activa
@@ -141,12 +167,12 @@ def _write_workbook(rows: list[_Row], path: Path) -> None:
     workbook.save(path)
 
 
-def _write_json(rows: list[_Row], path: Path) -> None:
+def write_json_rows(rows: list[Row], path: Path) -> None:
     records = [dict(zip(COLUMNS, values, strict=True)) for values in rows]
     path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _atomic(path: Path, writer: _Writer, rows: list[_Row]) -> bool:
+def write_atomic(path: Path, writer: Writer, rows: list[Row]) -> bool:
     """Escribe en un temporal del mismo directorio y lo mueve con `os.replace`.
 
     Devuelve False si falla (sin propagar el texto de la causa). Si el destino ya existe se
@@ -158,7 +184,7 @@ def _atomic(path: Path, writer: _Writer, rows: list[_Row]) -> bool:
     try:
         writer(rows, temp)
         os.replace(temp, path)
-    except (OSError, IllegalCharacterError, UnicodeError):
+    except (OSError, IllegalCharacterError, UnicodeError, csv.Error):
         return False
     finally:
         with contextlib.suppress(OSError):
@@ -166,7 +192,7 @@ def _atomic(path: Path, writer: _Writer, rows: list[_Row]) -> bool:
     return True
 
 
-def _check_name(name: str) -> None:
+def check_name(name: str) -> None:
     if not name or name in {".", ".."} or Path(name).name != name or "\\" in name:
         raise UnsafePathError(UnsafePathReason.INVALID_PATH)
 
@@ -183,9 +209,9 @@ def export_json_backup(outcomes: list[QueryOutcome], output_dir: Path, name: str
         UnsafePathError: `name` vacío o con separadores/`..`.
         ExportError: Si no se puede escribir o el destino ya existe (mensaje genérico).
     """
-    _check_name(name)
+    check_name(name)
     path = output_dir / f"{name}.json"
-    if not _atomic(path, _write_json, [_build_row(outcome) for outcome in outcomes]):
+    if not write_atomic(path, write_json_rows, [build_row(outcome) for outcome in outcomes]):
         raise ExportError from None
     return path
 
@@ -215,13 +241,13 @@ def export_excel(outcomes: list[QueryOutcome], path: Path, *, output_dir: Path) 
         raise UnsafePathError(UnsafePathReason.OUTSIDE_OUTPUT_DIR)
     if path.suffix.lower() != ".xlsx":
         raise UnsafePathError(UnsafePathReason.INVALID_PATH)
-    rows = [_build_row(outcome) for outcome in outcomes]
+    rows = [build_row(outcome) for outcome in outcomes]
     alternative = path.with_name(f"{path.stem}_1{path.suffix}")
-    if _atomic(path, _write_workbook, rows):
+    if write_atomic(path, _write_workbook, rows):
         return ExportReport(path, ExportKind.XLSX)
-    if _atomic(alternative, _write_workbook, rows):
+    if write_atomic(alternative, _write_workbook, rows):
         return ExportReport(alternative, ExportKind.XLSX_ALTERNATIVE)
     backup = output_dir / f"{path.stem}.json"
-    if _atomic(backup, _write_json, rows):
+    if write_atomic(backup, write_json_rows, rows):
         return ExportReport(backup, ExportKind.JSON_BACKUP)
     raise ExportError from None

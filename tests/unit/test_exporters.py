@@ -1,5 +1,6 @@
 """Pruebas del exportador Excel/JSON (T-46). Solo identificaciones de la lista blanca."""
 
+import csv
 import json
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
@@ -24,6 +25,7 @@ from rut_checker.io.exporters import (
     export_json_backup,
     neutralize_cell,
 )
+from rut_checker.io.flat_exporters import export_csv, export_json
 
 BOGOTA = timezone(timedelta(hours=-5))
 WHEN = datetime(2026, 10, 9, 8, 30, tzinfo=BOGOTA)
@@ -347,3 +349,187 @@ def test_existing_unlocked_destination_is_never_overwritten(tmp_path: Path) -> N
         path=tmp_path / "resultado_run_1.xlsx", kind=ExportKind.XLSX_ALTERNATIVE
     )
     assert not [p for p in tmp_path.iterdir() if ".tmp" in p.name]
+
+
+# --- T-47: CSV (neutralización por primer carácter visible) -----------------------------------
+
+FULLWIDTH = [chr(code) for code in (0xFF1D, 0xFF0B, 0xFF0D, 0xFF20)]  # = + - @ de ancho completo
+DANGEROUS_FIRST = ["=", "+", "-", "@", "\t", "\r", *FULLWIDTH, "|"]
+ZERO_WIDTH_SPACE, BOM, NBSP = chr(0x200B), chr(0xFEFF), chr(0xA0)
+INVISIBLE_PREFIXES = ["", " ", "  ", ZERO_WIDTH_SPACE, BOM, NBSP, f" {ZERO_WIDTH_SPACE}{BOM} "]
+
+
+def _csv_records(path: Path) -> list[list[str]]:
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        return list(csv.reader(handle))
+
+
+@pytest.mark.parametrize("invisible", INVISIBLE_PREFIXES)
+@pytest.mark.parametrize("danger", DANGEROUS_FIRST)
+def test_csv_has_spec_columns_and_neutralized_cells(
+    danger: str, invisible: str, tmp_path: Path
+) -> None:
+    value = f"{invisible}{danger}1+1"
+    report = export_csv(
+        [_ok(0), _outcome_with_text(value)], tmp_path / "r.csv", output_dir=tmp_path
+    )
+    assert report.kind is ExportKind.CSV
+    raw = report.path.read_bytes()
+    assert raw.startswith(b"\xef\xbb\xbf")  # BOM UTF-8 para Excel en Windows
+    records = _csv_records(report.path)
+    assert tuple(records[0]) == COLUMNS
+    assert len(records) == 3
+    assert records[1][0] == ID_ONE
+    for column in (2, 3, 7):
+        # CR y LF se aplanan a espacio: un CR inicial ya no queda al comienzo de línea.
+        flat = value.replace(chr(13), " ").replace(chr(10), " ")
+        assert records[2][column] == (flat if danger == chr(13) else "'" + value)
+
+
+@pytest.mark.parametrize("text", ["ACTIVO", " ACTIVO", "1+1", "a=b", "x-y", "N-1", "ñandú"])
+def test_csv_leaves_safe_text_untouched(text: str, tmp_path: Path) -> None:
+    report = export_csv([_outcome_with_text(text)], tmp_path / "r.csv", output_dir=tmp_path)
+    assert _csv_records(report.path)[1][2] == text
+
+
+def test_csv_quotes_commas_and_quotes_and_flattens_newlines(tmp_path: Path) -> None:
+    value = 'a,"b"\nc'
+    report = export_csv([_outcome_with_text(value)], tmp_path / "r.csv", output_dir=tmp_path)
+    assert _csv_records(report.path)[1][3] == value.replace(chr(10), " ")
+
+
+@pytest.mark.parametrize("raw", ["-" + ID_ONE, "+" + ID_ONE, "=" + ID_ONE])
+def test_csv_signed_identifier_is_neutralized_and_does_not_break(raw: str, tmp_path: Path) -> None:
+    report = export_csv([_invalid(raw, raw_dv="-1")], tmp_path / "r.csv", output_dir=tmp_path)
+    row = _csv_records(report.path)[1]
+    assert row[0] == "'" + raw
+    assert row[1] == "'-1"
+
+
+def test_csv_invalid_row_note_is_never_exported(tmp_path: Path) -> None:
+    outcome = _invalid("12A45", raw_note=f"llamar al {NOT_WHITELISTED_PHONE} hoy")
+    report = export_csv([outcome], tmp_path / "r.csv", output_dir=tmp_path)
+    assert "llamar" not in report.path.read_text(encoding="utf-8")
+
+
+def test_csv_replaces_illegal_characters(tmp_path: Path) -> None:
+    dirty = ID_ONE[:4] + "\x00" + ID_ONE[4:]
+    report = export_csv([_invalid(dirty)], tmp_path / "r.csv", output_dir=tmp_path)
+    assert _csv_records(report.path)[1][0] == ID_ONE[:4] + "�" + ID_ONE[4:]
+
+
+def test_csv_never_overwrites_and_falls_back_to_alternative(tmp_path: Path) -> None:
+    previous = tmp_path / "r.csv"
+    previous.write_bytes(b"previo")
+    report = export_csv([_ok(0)], previous, output_dir=tmp_path)
+    assert previous.read_bytes() == b"previo"
+    assert report == ExportReport(tmp_path / "r_1.csv", ExportKind.CSV_ALTERNATIVE)
+    assert not [p for p in tmp_path.iterdir() if ".tmp" in p.name]
+
+
+def test_csv_falls_back_to_json_backup_when_both_csv_names_fail(tmp_path: Path) -> None:
+    (tmp_path / "r.csv").write_bytes(b"1")
+    (tmp_path / "r_1.csv").write_bytes(b"2")
+    report = export_csv([_ok(0)], tmp_path / "r.csv", output_dir=tmp_path)
+    assert report == ExportReport(tmp_path / "r.json", ExportKind.JSON_BACKUP)
+    assert json.loads(report.path.read_text(encoding="utf-8"))[0]["identificacion"] == ID_ONE
+
+
+def test_csv_all_destinations_failing_raises_generic_export_error(tmp_path: Path) -> None:
+    for name in ("r.csv", "r_1.csv", "r.json"):
+        (tmp_path / name).write_bytes(b"x")
+    with pytest.raises(ExportError) as info:
+        export_csv([_ok(0)], tmp_path / "r.csv", output_dir=tmp_path)
+    assert ID_ONE not in str(info.value)
+
+
+def test_csv_rejects_outside_dir_and_wrong_suffix(tmp_path: Path) -> None:
+    out = tmp_path / "output"
+    out.mkdir()
+    with pytest.raises(UnsafePathError) as outside:
+        export_csv([_ok(0)], tmp_path / "otro.csv", output_dir=out)
+    assert outside.value.reason is UnsafePathReason.OUTSIDE_OUTPUT_DIR
+    with pytest.raises(UnsafePathError) as suffix:
+        export_csv([_ok(0)], out / "r.xlsx", output_dir=out)
+    assert suffix.value.reason is UnsafePathReason.INVALID_PATH
+    assert list(out.iterdir()) == []
+
+
+# --- T-47: JSON -------------------------------------------------------------------------------
+
+
+def test_json_has_exactly_spec_keys_in_order_and_utf8(tmp_path: Path) -> None:
+    report = export_json([_ok(0), _invalid("12A45")], tmp_path / "r.json", output_dir=tmp_path)
+    assert report == ExportReport(tmp_path / "r.json", ExportKind.JSON)
+    text = report.path.read_text(encoding="utf-8")
+    data = json.loads(text)
+    assert [list(item) for item in data] == [list(COLUMNS)] * 2
+    assert data[0]["identificacion"] == ID_ONE
+    assert data[0]["fecha_consulta"] == "2026-10-09T08:30:00-05:00"
+    assert data[1]["estado_consulta"] == "ENTRADA_INVALIDA"
+
+
+def test_json_keeps_non_ascii_unescaped_and_does_not_neutralize(tmp_path: Path) -> None:
+    outcome = _outcome_with_text("=ñandú")
+    report = export_json([outcome], tmp_path / "r.json", output_dir=tmp_path)
+    text = report.path.read_text(encoding="utf-8")
+    assert "ñandú" in text
+    assert json.loads(text)[0]["nombre_o_razon_social"] == "=ñandú"
+
+
+def test_json_escapes_control_chars_and_replaces_illegal_ones(tmp_path: Path) -> None:
+    outcome = _outcome_with_text("a\tb\nc\x00d\ud800")
+    report = export_json([outcome], tmp_path / "r.json", output_dir=tmp_path)
+    text = report.path.read_text(encoding="utf-8")
+    assert "\t" not in text.replace("\n", "")  # el tabulador va escapado
+    assert json.loads(text)[0]["nombre_o_razon_social"] == "a\tb\nc�d�"
+
+
+def test_json_invalid_row_note_is_never_exported(tmp_path: Path) -> None:
+    outcome = _invalid("12A45", raw_note=f"llamar al {NOT_WHITELISTED_PHONE} hoy")
+    report = export_json([outcome], tmp_path / "r.json", output_dir=tmp_path)
+    assert "llamar" not in report.path.read_text(encoding="utf-8")
+
+
+def test_json_never_overwrites_uses_alternative_then_raises(tmp_path: Path) -> None:
+    previous = tmp_path / "r.json"
+    previous.write_bytes(b"previo")
+    report = export_json([_ok(0)], previous, output_dir=tmp_path)
+    assert previous.read_bytes() == b"previo"
+    assert report == ExportReport(tmp_path / "r_1.json", ExportKind.JSON_ALTERNATIVE)
+    with pytest.raises(ExportError):
+        export_json([_ok(0)], previous, output_dir=tmp_path)
+
+
+def test_json_rejects_outside_dir_and_wrong_suffix(tmp_path: Path) -> None:
+    out = tmp_path / "output"
+    out.mkdir()
+    with pytest.raises(UnsafePathError):
+        export_json([_ok(0)], tmp_path / "otro.json", output_dir=out)
+    with pytest.raises(UnsafePathError):
+        export_json([_ok(0)], out / "r.csv", output_dir=out)
+
+
+def test_csv_no_physical_line_starts_with_a_formula(tmp_path: Path) -> None:
+    """Los saltos de línea dentro de una celda se vuelven espacio (T-47, BAJA)."""
+    report = export_csv(
+        [_outcome_with_text("ab\ncd\r\n=1+1")], tmp_path / "r.csv", output_dir=tmp_path
+    )
+    assert _csv_records(report.path)[1][2] == "ab cd  =1+1"
+    lines = report.path.read_text(encoding="utf-8-sig").splitlines()
+    assert len(lines) == 2
+    assert not any(line.startswith(("=", "+", "-", "@")) for line in lines)
+
+
+IGNORABLES = [
+    chr(c) for c in (0x034F, 0x115F, 0x1160, 0x3164, 0xFFA0, 0x180B, 0x180D, 0xFE00, 0xFE0F)
+]
+
+
+@pytest.mark.parametrize("ignorable", IGNORABLES)
+def test_csv_skips_default_ignorable_characters_before_the_formula(
+    ignorable: str, tmp_path: Path
+) -> None:
+    value = f"{ignorable}=1+1"
+    report = export_csv([_outcome_with_text(value)], tmp_path / "r.csv", output_dir=tmp_path)
+    assert _csv_records(report.path)[1][2] == "'" + value

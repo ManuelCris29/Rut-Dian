@@ -2,7 +2,7 @@
 
 Reglas:
 - Solo los nombres EXACTOS que genera la aplicación llevan un `run_id` de confianza:
-  `resultado_<id>.xlsx|_1.xlsx|.json`, `run_<id>.jsonl`, `snapshot_<id>_<n>.html` y los
+  `resultado_<id>[_1].xlsx|csv|json`, `run_<id>.jsonl`, `snapshot_<id>_<n>.html` y los
   temporales `.resultado_<id>[_1].tmp.*`. Un nombre que solo "contiene" un `run_id` (copias,
   `.bak`, notas) se trata como archivo sin `run_id`.
 - Antigüedad: del `run_id` (hora de Bogotá); sin `run_id`, con `run_id` imposible o con
@@ -44,7 +44,7 @@ from rut_checker.infra.run_source import read_run_source
 _BOGOTA: Final = ZoneInfo("America/Bogota")
 _ID: Final = r"([0-9]{8}-[0-9]{6}-[0-9a-f]{4})"
 _EXACT_NAMES: Final = (
-    (FileKind.RESULT, re.compile(rf"resultado_{_ID}(?:_1)?\.xlsx|resultado_{_ID}\.json", re.ASCII)),
+    (FileKind.RESULT, re.compile(rf"resultado_{_ID}(?:_1)?\.(?:xlsx|csv|json)", re.ASCII)),
     (FileKind.RUN_LOG, re.compile(rf"run_{_ID}\.jsonl", re.ASCII)),
     (FileKind.SNAPSHOT, re.compile(rf"snapshot_{_ID}_[0-9]+\.html", re.ASCII)),
     (FileKind.TEMP, re.compile(rf"\.resultado_{_ID}(?:_1)?\.tmp\..+", re.ASCII)),

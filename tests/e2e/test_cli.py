@@ -5,6 +5,7 @@ Cada prueba corre en un proyecto temporal (`workspace`): cwd propio, `.gitignore
 de la lista blanca ficticia.
 """
 
+import csv
 import json
 import logging
 import os
@@ -20,14 +21,14 @@ import pytest
 from openpyxl import load_workbook
 from typer.testing import CliRunner, Result
 
-from rut_checker import cli, cli_support
+from rut_checker import cli, cli_support, wiring
 from rut_checker.adapters.console_operator import ConsoleOperator
 from rut_checker.adapters.contingency_source import ContingencySource
 from rut_checker.adapters.document_copy_source import DocumentCopySource
 from rut_checker.application.batch_service import BatchQueryService
 from rut_checker.application.report import StopReason
 from rut_checker.application.retry_policy import BackoffRetryPolicy
-from rut_checker.cli import app, build_service
+from rut_checker.cli import app
 from rut_checker.domain.errors import (
     ExportError,
     PortalUnavailable,
@@ -43,6 +44,7 @@ from rut_checker.infra.logging import ChallengeLogSink, close_run_logging
 from rut_checker.infra.paths import assert_safe_dir, ensure_private_dir
 from rut_checker.infra.settings import Settings
 from rut_checker.io.exporters import ExportKind, ExportReport
+from rut_checker.wiring import build_service
 
 runner = CliRunner()
 BOGOTA = ZoneInfo("America/Bogota")
@@ -106,7 +108,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]
     (tmp_path / ".gitignore").write_text("output/\nlogs/\ndata/\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     RecordingSleeper.instances = []
-    monkeypatch.setattr(cli, "SystemSleeper", RecordingSleeper)
+    monkeypatch.setattr(wiring, "SystemSleeper", RecordingSleeper)
     root = logging.getLogger()
     saved = list(root.handlers)  # la CLI añade un NullHandler al root; no debe filtrarse
     yield tmp_path
@@ -607,7 +609,7 @@ def test_build_service_uses_configure_logging(
         calls.append((run_id, log_dir))
         return logging.Logger("sentinel")
 
-    monkeypatch.setattr(cli, "configure_logging", _configure)
+    monkeypatch.setattr(wiring, "configure_logging", _configure)
     settings = Settings()
     build_service(settings)
     ((run_id, log_dir),) = calls
@@ -810,3 +812,101 @@ def test_help_lists_commands() -> None:
     assert result.exit_code == 0
     assert "lote" in result.output
     assert "consultar" in result.output
+
+
+# --- T-47: --formato xlsx|json|csv ------------------------------------------------------------
+
+SPEC_COLUMNS = [
+    "identificacion",
+    "dv",
+    "nombre_o_razon_social",
+    "estado_rut",
+    "fecha_consulta",
+    "fuente",
+    "estado_consulta",
+    "observacion",
+]
+
+
+def test_lote_csv_format_writes_spec_columns_with_bom_and_exits_0(workspace: Path) -> None:
+    batch = _write_batch(workspace, [f"{ID_1},{_recent_copy_date()},USR-001", "=12A45,,"])
+    result = _lote(batch, "--formato", "csv")
+    assert result.exit_code == 0, result.stderr
+    (path,) = (workspace / "output").glob("resultado_*.csv")
+    assert not list((workspace / "output").glob("*.xlsx"))
+    assert path.read_bytes().startswith(b"\xef\xbb\xbf")
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        records = list(csv.reader(handle))
+    assert records[0] == SPEC_COLUMNS
+    assert [r[0] for r in records[1:]] == [ID_1, "'=12A45"]
+    assert [r[6] for r in records[1:]] == ["VALIDADA_COPIA_RUT", "ENTRADA_INVALIDA"]
+    assert str(path) in result.output
+    _no_leak(result, workspace, ID_1)
+
+
+def test_lote_json_format_writes_spec_keys_and_exits_0(workspace: Path) -> None:
+    result = _lote(_write_batch(workspace, [ID_1, ID_2]), "--formato", "json")
+    assert result.exit_code == 0, result.stderr
+    (path,) = (workspace / "output").glob("resultado_*.json")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert [list(item) for item in data] == [SPEC_COLUMNS] * 2
+    assert [item["identificacion"] for item in data] == [ID_1, ID_2]
+
+
+def test_default_format_is_still_xlsx(workspace: Path) -> None:
+    assert _lote(_write_batch(workspace, [ID_1])).exit_code == 0
+    assert list((workspace / "output").glob("resultado_*.xlsx"))
+    assert not list((workspace / "output").glob("resultado_*.csv"))
+
+
+def test_unknown_format_exits_2_without_files(workspace: Path) -> None:
+    result = _lote(_write_batch(workspace, [ID_1]), "--formato", "pdf")
+    assert result.exit_code == 2
+    assert not (workspace / "output").exists()
+
+
+@pytest.mark.parametrize(
+    ("fmt", "salida"), [("csv", "x.xlsx"), ("json", "a.csv"), ("xlsx", "b.json")]
+)
+def test_salida_with_other_extension_exits_2_without_files(
+    workspace: Path, fmt: str, salida: str
+) -> None:
+    result = _lote(_write_batch(workspace, [ID_1]), "--formato", fmt, "--salida", salida)
+    assert result.exit_code == 2
+    assert "extensión" in result.stderr
+    assert salida not in result.stderr
+    assert not (workspace / "output").exists()
+    assert not (workspace / "logs").exists()
+
+
+def test_csv_export_failure_falls_back_to_json_with_code_3(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backup = workspace / "output" / "resultado_x.json"
+    monkeypatch.setattr(
+        cli, "export_csv", lambda *_a, **_k: ExportReport(backup, ExportKind.JSON_BACKUP)
+    )
+    result = _lote(_write_batch(workspace, [ID_1]), "--formato", "csv")
+    assert result.exit_code == 3
+    assert "respaldo" in result.stderr.lower()
+
+
+@pytest.mark.parametrize("name", ["export_csv", "export_json"])
+def test_flat_export_error_exits_3_and_logs_event(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    def _fail(*_a: object, **_k: object) -> ExportReport:
+        raise ExportError
+
+    monkeypatch.setattr(cli, name, _fail)
+    fmt = name.removeprefix("export_")
+    assert _lote(_write_batch(workspace, [ID_1]), "--formato", fmt).exit_code == 3
+    (event,) = [e for e in _log_events(workspace) if e["event"] == "export_failed"]
+    assert event["error_code"] == "EXPORT_FAILED"
+
+
+def test_consultar_accepts_format_csv(workspace: Path) -> None:
+    result = runner.invoke(app, ["consultar", ID_1, "--formato", "csv"])
+    assert result.exit_code == 0, result.stderr
+    (path,) = (workspace / "output").glob("resultado_*.csv")
+    assert ID_1 in path.read_text(encoding="utf-8-sig")
