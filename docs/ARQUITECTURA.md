@@ -207,7 +207,7 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 | Columna | Origen | Notas |
 |---|---|---|
 | `identificacion` | Número normalizado (o el valor crudo si es `ENTRADA_INVALIDA`) | Se escribe **como texto**; dato personal: solo en `output/` |
-| `dv` | Entrada o fuente | Vacío si no aplica |
+| `dv` | **Solo de la entrada** (`IdentificationInput.dv`, o `InputRow.raw_dv` si la fila es inválida); ninguna fuente lo aporta | Vacío si no aplica |
 | `nombre_o_razon_social` | Solo `PORTAL_DIAN_C1` | **Vacío** en C (D-3) y F |
 | `estado_rut` | Solo `PORTAL_DIAN_C1`, texto tal cual lo muestre el portal (RN-03) | **Vacío** en C (D-3) y F; nunca se inventa |
 | `fecha_consulta` | `Clock.now()` en `America/Bogota`, ISO 8601 con desfase | Fecha de procesamiento de la fila |
@@ -219,6 +219,21 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 - Archivo `output/resultado_<run_id>.xlsx`, hoja `resultado`. `run_id = AAAAMMDD-HHMMSS-<4 hex>` (sin ids).
 - **Neutralización (Obs-9):** toda celda de texto que empiece por `=`, `+`, `-`, `@`, tabulador o retorno
   de carro se prefija para que Excel la trate como texto. Aplica también a CSV/JSON (T-47).
+
+### 5.4 Modelos de dominio (T-42, `domain/models.py`)
+
+- **`InputRow`** (vive en `domain`; la produce `io/readers`): fila cruda (`row_index` y valores `raw_*`
+  como texto sin validar). Permite representar filas inválidas sin construir un `IdentificationInput`.
+  `repr` enmascara `raw_identification` y oculta el resto.
+- **`IdentificationInput`**: entrada ya normalizada y válida en formato (T-41 normaliza y valida longitud/DV).
+- **`QueryOutcome`**: `row: InputRow` + `identification: IdentificationInput | None` + `result` +
+  `queried_at` + `duration_ms`. `identification` es `None` solo si el estado es `ENTRADA_INVALIDA`
+  (fuente `SIN_CONSULTA`). La zona horaria de `queried_at` la fija el `Clock` (T-35).
+- **`CopyVerdict`** (`VALID`, `EXPIRED`, `FUTURE_DATE`): `evaluate_copy_evidence` no lanza por fecha futura;
+  `DocumentCopySource` la traduce a `PENDIENTE_VALIDACION_MANUAL` "fecha de copia inválida".
+- Invariantes de `RutResult`: `VALIDADA_COPIA_RUT` => fuente `COPIA_RUT_TERCERO` y sin estado/nombre;
+  `ENTRADA_INVALIDA` => `SIN_CONSULTA`; `estado_rut`/`name` solo con `PORTAL_DIAN_C1` o `FAKE`
+  (incumplirlos es error de programación). `EXITOSA` sin `estado_rut` => `IncompleteResult` (dato).
 
 ## 6. CLI
 
