@@ -198,6 +198,19 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 - Encabezados sin distinguir mayúsculas ni tildes; primera hoja del `.xlsx`; CSV `utf-8-sig` con `,` o `;`.
 - `openpyxl` con `defusedxml` instalado (protección XML, ADR-0001).
 - Falta `identificacion` o el lote supera `RUT_MAX_BATCH_SIZE` → error de archivo, código 2, sin procesar.
+  `InvalidInputFile(reason)` lleva un `InvalidFileReason` cerrado (formato no soportado, archivo > 10 MB o
+  zip sospechoso de bomba [> 10 MB descomprimido, razón de compresión > 100 en miembros ≥ 1 MiB, o `sharedStrings.xml`/hojas > 5 MB], ilegible,
+  codificación, columna `identificacion` ausente, columna mapeada duplicada, primera hoja oculta, demasiadas
+  filas, demasiadas filas vacías o con formato, vacío); sin rutas ni valores de celdas. La lectura es perezosa
+  y se aborta al superar `max_rows` filas no vacías o `max_rows × 10` filas crudas. Solo se lee la primera
+  hoja (debe estar visible); la dimensión declarada en el `.xlsx` se ignora (`reset_dimensions()`) para no
+  perder filas. Encabezados: espacios y guiones equivalen a `_`.
+- **Texto de celdas:** los caracteres de control (C0 salvo tabulador, DEL, C1, U+FFFE/U+FFFF y controles bidi U+202A–202E y U+2066–2069) se reemplazan por U+FFFD (nunca se eliminan,
+  para no fabricar identificaciones válidas) y el texto se trunca a 1001 caracteres para que el dominio lo
+  rechace por longitud.
+- **Celdas numéricas de `identificacion`:** el lector las pasa sin convertir (`int`/`float`), porque `1.001`
+  convertido a texto se leería como miles (1001). `validate_identification` rechaza los floats con decimales.
+  El resto de columnas llegan como texto (float entero → sin `.0`; con decimales → `str` sin redondear).
 - `fecha_copia_rut` ilegible, responsable inválido u observación > 200 → fila `ENTRADA_INVALIDA` con motivo.
 - `InvalidIdentification.reason` describe la regla incumplida ("contiene caracteres no numéricos",
   "longitud fuera de rango", "DV incorrecto") y **nunca** incluye el valor crudo (Obs-7).
@@ -224,6 +237,8 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 | `observacion` | Mensaje del catálogo + motivo; en C: "Validado contra copia del RUT de fecha AAAA-MM-DD; responsable: USR-001" + observación del área (también en copia vencida/futura; espacios colapsados, números largos enmascarados) | Sin id completo |
 
 - Una fila por fila de entrada, en el orden original, incluidas duplicadas e inválidas (G7).
+- **Minimización:** sin evidencia de copia del RUT (contingencia sin `fecha_copia_rut`/responsable) la nota del
+  área (`observacion` de entrada) **no se incluye** en la salida; solo se copia cuando acompaña una evidencia (C).
 - Archivo `output/resultado_<run_id>.xlsx`, hoja `resultado`. `run_id = AAAAMMDD-HHMMSS-<4 hex>` (sin ids).
 - **Neutralización (Obs-9):** toda celda de texto que empiece por `=`, `+`, `-`, `@`, tabulador o retorno
   de carro se prefija para que Excel la trate como texto. Aplica también a CSV/JSON (T-47).
@@ -231,7 +246,7 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 ### 5.4 Modelos de dominio (T-42, `domain/models.py`)
 
 - **`InputRow`** (vive en `domain`; la produce `io/readers`): fila cruda (`row_index` y valores `raw_*`
-  como texto sin validar). Permite representar filas inválidas sin construir un `IdentificationInput`.
+  sin validar: texto, salvo `raw_identification`, que puede ser `str | int | float` tal como vino de la celda). Permite representar filas inválidas sin construir un `IdentificationInput`.
   `repr` enmascara `raw_identification` y oculta el resto.
 - **`IdentificationInput`**: entrada ya normalizada y válida en formato (T-41 normaliza y valida longitud/DV).
 - **`QueryOutcome`**: `row: InputRow` + `identification: IdentificationInput | None` + `result` +

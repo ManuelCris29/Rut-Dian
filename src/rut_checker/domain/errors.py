@@ -51,6 +51,40 @@ class InvalidIdentification(RutCheckerError):
         return f"Número inválido: {self.reason.value}"
 
 
+class InvalidFileReason(StrEnum):
+    """Conjunto cerrado de motivos por los que un archivo de entrada no se procesa.
+
+    Sin texto libre: imposibles de contaminar con rutas, valores de celdas o texto de librerías.
+    """
+
+    UNSUPPORTED_FORMAT = "formato no soportado"
+    TOO_LARGE = "archivo demasiado grande"
+    UNREADABLE = "archivo ilegible"
+    NOT_UTF8 = "codificación de texto no soportada"
+    MISSING_ID_COLUMN = "falta la columna identificacion"
+    DUPLICATE_COLUMN = "columna duplicada en el encabezado"
+    FIRST_SHEET_HIDDEN = "la primera hoja está oculta"
+    TOO_MANY_ROWS = "el lote supera el máximo de filas"
+    TOO_MANY_RAW_ROWS = "demasiadas filas vacías o con formato"
+    EMPTY = "archivo vacío"
+
+
+class InvalidInputFile(RutCheckerError):
+    """El archivo de entrada no se puede procesar (formato, columnas o tamaño del lote).
+
+    La CLI lo traduce al código de salida 2 (ARQUITECTURA §5.2 y §6).
+    """
+
+    def __init__(self, reason: InvalidFileReason) -> None:
+        if not isinstance(reason, InvalidFileReason):
+            raise TypeError("motivo de archivo inválido fuera del conjunto cerrado")
+        self.reason = reason
+        super().__init__()
+
+    def _message(self) -> str:
+        return f"Archivo de entrada inválido: {self.reason.value}"
+
+
 class PortalUnavailable(RutCheckerError):
     """Mantenimiento, error 5xx o fallo de red en el canal."""
 

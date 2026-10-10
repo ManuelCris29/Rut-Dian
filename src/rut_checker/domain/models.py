@@ -139,8 +139,19 @@ class IdentificationInput(_DomainModel):
                 yield name, value
 
 
+def _numeric_text(value: str | int | float) -> str:
+    """Texto de un valor crudo; un float entero se muestra sin `.0` (se enmascara igual)."""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
 class InputRow(_DomainModel):
     """Fila de entrada tal como la leyó `io/readers` (valores crudos, sin validar).
+
+    `raw_identification` conserva el tipo de la celda (texto, `int` o `float`) para que el
+    dominio decida: convertir `1.001` a texto lo confundiría con miles. Las demás columnas son
+    texto.
 
     Existe para poder representar filas inválidas (`ENTRADA_INVALIDA`) en el desenlace sin
     construir un `IdentificationInput`. Solo `raw_identification` se muestra en `repr`, y
@@ -148,7 +159,7 @@ class InputRow(_DomainModel):
     """
 
     row_index: int = Field(ge=0)
-    raw_identification: str | None = None
+    raw_identification: str | int | float | None = None
     raw_dv: str | None = Field(default=None, repr=False)
     raw_copy_date: str | None = Field(default=None, repr=False)
     raw_responsible: str | None = Field(default=None, repr=False)
@@ -156,8 +167,8 @@ class InputRow(_DomainModel):
 
     def __repr_args__(self) -> Iterable[tuple[str | None, object]]:
         for name, value in super().__repr_args__():
-            if name == "raw_identification" and isinstance(value, str):
-                yield name, mask_identification(value)
+            if name == "raw_identification" and isinstance(value, str | int | float):
+                yield name, mask_identification(_numeric_text(value))
             else:
                 yield name, value
 

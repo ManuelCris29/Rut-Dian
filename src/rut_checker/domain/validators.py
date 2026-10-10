@@ -85,8 +85,13 @@ def _numeric_to_digits(value: int) -> str:
 
 
 def _float_to_digits(value: float) -> str:
-    if not math.isfinite(value) or not value.is_integer() or abs(value) > _MAX_EXACT_FLOAT:
+    if not math.isfinite(value) or not value.is_integer():
         raise InvalidIdentification(InvalidReason.NON_NUMERIC)
+    if abs(value) > _MAX_EXACT_FLOAT:
+        # Entero demasiado grande: pierde precisión y de todos modos excede la longitud máxima.
+        raise InvalidIdentification(
+            InvalidReason.LENGTH_OUT_OF_RANGE if value > 0 else InvalidReason.NON_NUMERIC
+        )
     return _numeric_to_digits(int(value))
 
 

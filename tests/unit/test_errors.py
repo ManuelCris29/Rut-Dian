@@ -3,7 +3,13 @@
 import pytest
 
 from rut_checker.domain import errors
-from rut_checker.domain.errors import InvalidIdentification, InvalidReason, RutCheckerError
+from rut_checker.domain.errors import (
+    InvalidFileReason,
+    InvalidIdentification,
+    InvalidInputFile,
+    InvalidReason,
+    RutCheckerError,
+)
 
 GENERIC_ERRORS: list[type[RutCheckerError]] = [
     errors.PortalUnavailable,
@@ -50,3 +56,25 @@ def test_reason_set_is_closed_and_digit_free() -> None:
 def test_generic_errors_reject_custom_message(cls: type[RutCheckerError]) -> None:
     with pytest.raises(TypeError):
         cls("1234567890")  # type: ignore[call-arg]  # prueba intencional: mensaje propio no permitido
+
+
+def test_invalid_input_file_keeps_closed_reason() -> None:
+    exc = InvalidInputFile(InvalidFileReason.TOO_MANY_ROWS)
+    assert exc.reason is InvalidFileReason.TOO_MANY_ROWS
+    assert InvalidFileReason.TOO_MANY_ROWS.value in str(exc)
+
+
+def test_invalid_input_file_rejects_free_text() -> None:
+    with pytest.raises(TypeError, match="motivo"):
+        InvalidInputFile("C:/datos/1234567890.xlsx")  # type: ignore[arg-type]  # prueba intencional
+
+
+def test_file_reason_set_is_digit_free() -> None:
+    for reason in InvalidFileReason:
+        assert not any(ch.isdigit() for ch in reason.value)
+
+
+def test_new_file_reasons_exist() -> None:
+    names = {r.name for r in InvalidFileReason}
+    assert {"DUPLICATE_COLUMN", "FIRST_SHEET_HIDDEN", "TOO_MANY_RAW_ROWS"} <= names
+    assert "DUPLICATE_ID_COLUMN" not in names

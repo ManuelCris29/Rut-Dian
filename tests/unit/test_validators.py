@@ -51,7 +51,7 @@ def test_normalizes_accepted_formats(raw: object, expected: tuple[str, str | Non
         ("1-2-3", InvalidReason.NON_NUMERIC),
         ("900000001-", InvalidReason.NON_NUMERIC),
         (1000000001.5, InvalidReason.NON_NUMERIC),
-        (1e30, InvalidReason.NON_NUMERIC),
+        (1e30, InvalidReason.LENGTH_OUT_OF_RANGE),
         (float("nan"), InvalidReason.NON_NUMERIC),
         (float("inf"), InvalidReason.NON_NUMERIC),
         (-5, InvalidReason.NON_NUMERIC),
@@ -169,8 +169,8 @@ def test_reason_never_contains_raw_value(raw: object) -> None:
 
 
 def test_excel_float_precision_limit() -> None:
-    """Flotantes que superan 2**53 pierden dígitos: se rechazan en vez de adivinar."""
-    assert _reason(float(2**53 + 2)) is InvalidReason.NON_NUMERIC
+    """Flotantes enteros que superan 2**53 pierden dígitos: se rechazan por longitud."""
+    assert _reason(float(2**53 + 2)) is InvalidReason.LENGTH_OUT_OF_RANGE
 
 
 @pytest.mark.parametrize("last", range(1, 10))

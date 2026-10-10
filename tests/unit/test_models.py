@@ -365,3 +365,10 @@ def test_outcome_entrada_invalida_may_keep_identification() -> None:
         result=RutResult(status=QueryStatus.ENTRADA_INVALIDA, source=SourceKind.SIN_CONSULTA)
     )
     assert outcome.identification is not None
+
+
+def test_input_row_repr_masks_whole_float_without_decimal_zero() -> None:
+    text = repr(_row(raw_identification=1000000001.0))
+    assert "******0001" in text
+    assert "1000000001" not in text
+    assert "1000000001.0" not in text
