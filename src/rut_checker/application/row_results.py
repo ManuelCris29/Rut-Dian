@@ -13,6 +13,11 @@ GLUED_REASON = "posible NIT con DV pegado"
 _STOP_NOTES = {
     StopReason.STRUCTURE_CHANGED: "Lote detenido: el portal cambió",
     StopReason.UNEXPECTED_ERROR: "Lote detenido por un error inesperado",
+    StopReason.PORTAL_UNAVAILABLE: "Lote detenido: portal no disponible",
+    StopReason.REPEATED_TIMEOUTS: "Lote detenido: tiempos de espera repetidos",
+    StopReason.REPEATED_SESSION_FAILURES: "Lote detenido: fallos de sesión repetidos",
+    StopReason.REPEATED_BLOCKS: "Lote detenido: verificación de seguridad no resuelta",
+    StopReason.OPERATOR_DECLINED: "Lote detenido: verificación de seguridad no resuelta",
 }
 
 

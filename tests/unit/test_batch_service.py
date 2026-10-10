@@ -323,13 +323,12 @@ def test_fuente_column_comes_from_result_source(make: Callable[..., Harness]) ->
 
 # --- Traducción excepción -> QueryStatus ---------------------------------------------------
 
+# `PortalUnavailable` y los bloqueos tienen efectos de lote (circuito, operador): ver
+# `test_batch_policies.py`; aquí solo se comprueba su traducción.
 _TRANSLATIONS: list[tuple[Callable[[], RutCheckerError], QueryStatus, StopReason | None]] = [
-    (PortalUnavailable, QueryStatus.PORTAL_NO_DISPONIBLE, None),
     (QueryTimeout, QueryStatus.TIEMPO_AGOTADO, None),
     (SessionExpired, QueryStatus.SESION_VENCIDA, None),
     (IncompleteResult, QueryStatus.RESULTADO_INCOMPLETO, None),
-    (HumanInterventionRequired, QueryStatus.REQUIERE_INTERVENCION_HUMANA, None),
-    (AccessBlocked, QueryStatus.REQUIERE_INTERVENCION_HUMANA, None),
     (StructureChanged, QueryStatus.ESTRUCTURA_CAMBIADA, StopReason.STRUCTURE_CHANGED),
     (ExportError, QueryStatus.ESTRUCTURA_CAMBIADA, StopReason.UNEXPECTED_ERROR),
 ]
@@ -378,7 +377,7 @@ def test_unexpected_exception_stops_batch_and_logs_only_class(
         QueryStatus.ESTRUCTURA_CAMBIADA,
         QueryStatus.PENDIENTE_VALIDACION_MANUAL,
         QueryStatus.PENDIENTE_VALIDACION_MANUAL,
-        QueryStatus.ESTRUCTURA_CAMBIADA,  # duplicado de la fila 0: mismo resultado
+        QueryStatus.PENDIENTE_VALIDACION_MANUAL,  # duplicado tras la parada
         QueryStatus.ENTRADA_INVALIDA,
     ]
     assert report.stop_reason is StopReason.UNEXPECTED_ERROR
@@ -487,9 +486,9 @@ class _RetryTwice:
 def test_default_policy_does_not_retry(make: Callable[..., Harness]) -> None:
     h = make(FakeSource({ID_1: PortalUnavailable}, paced=True))
     report = h.service.run([_row(0, ID_1)])
-    assert report.outcomes[0].result.status is QueryStatus.PORTAL_NO_DISPONIBLE
+    assert report.outcomes[0].result.status is QueryStatus.PENDIENTE_VALIDACION_MANUAL
     assert h.fake.total_calls == 1
-    assert h.sleeper.sleeps == []
+    assert h.sleeper.sleeps == [5.0]  # solo el ritmo inicial: sin política no hay backoff
 
 
 def test_injected_policy_retries_with_effective_pause_and_logs_attempt(
@@ -500,17 +499,28 @@ def test_injected_policy_retries_with_effective_pause_and_logs_attempt(
     report = h.service.run([_row(0, ID_1)])
     assert report.outcomes[0].result.status is QueryStatus.EXITOSA
     assert source.total_calls == 3
-    assert h.sleeper.sleeps == [30.0, 30.0]  # max(min_delay, backoff)
+    assert h.sleeper.sleeps == [5.0, 30.0, 30.0]  # ritmo inicial y max(min_delay, backoff)
     events = h.log_events()
     assert [e["event"] for e in events].count("retry_scheduled") == 2
     finished = next(e for e in events if e["event"] == "row_finished")
     assert finished["attempt"] == 3
 
 
-def test_retry_policy_giving_up_translates_last_error(make: Callable[..., Harness]) -> None:
+def test_retry_policy_giving_up_on_session_expired_translates_last_error(
+    make: Callable[..., Harness],
+) -> None:
+    h = make(FakeSource({ID_1: SessionExpired}), policy=_Hostile(1.0))
+    report = h.service.run([_row(0, ID_1)])
+    assert report.outcomes[0].result.status is QueryStatus.SESION_VENCIDA
+    assert h.fake.total_calls == MAX_ATTEMPTS
+
+
+def test_retry_policy_giving_up_on_portal_falls_back_to_pending(
+    make: Callable[..., Harness],
+) -> None:
     h = make(FakeSource({ID_1: PortalUnavailable}), policy=_RetryTwice())
     report = h.service.run([_row(0, ID_1)])
-    assert report.outcomes[0].result.status is QueryStatus.PORTAL_NO_DISPONIBLE
+    assert report.outcomes[0].result.status is QueryStatus.PENDIENTE_VALIDACION_MANUAL
     assert h.fake.total_calls == 3
 
 
@@ -522,7 +532,7 @@ def test_paced_source_waits_min_delay_between_distinct_queries(
 ) -> None:
     h = make(FakeSource(paced=True), min_delay=7.0)
     h.service.run([_row(0, ID_1), _row(1, ID_2), _row(2, ID_1), _row(3, ID_3)])
-    assert h.sleeper.sleeps == [7.0, 7.0]  # sin pausa antes de la primera ni por duplicados
+    assert h.sleeper.sleeps == [7.0, 7.0, 7.0]  # una por consulta real, no por duplicados
 
 
 def test_unpaced_source_never_sleeps(make: Callable[..., Harness]) -> None:
@@ -683,7 +693,7 @@ def test_retries_are_bounded_even_with_hostile_policy(make: Callable[..., Harnes
     h = make(FakeSource({ID_1: PortalUnavailable}), policy=_Hostile(1.0))
     report = h.service.run([_row(0, ID_1)])
     assert h.fake.total_calls == MAX_ATTEMPTS
-    assert report.outcomes[0].result.status is QueryStatus.PORTAL_NO_DISPONIBLE
+    assert report.outcomes[0].result.status is QueryStatus.PENDIENTE_VALIDACION_MANUAL
 
 
 @pytest.mark.parametrize("delay", [float("nan"), float("inf"), -1.0])
@@ -700,7 +710,7 @@ def test_pause_is_max_of_min_delay_and_backoff(make: Callable[..., Harness]) -> 
     source = FakeSource({ID_1: [PortalUnavailable, _ok()]}, paced=True)
     h = make(source, policy=_Hostile(2.0), min_delay=7.0)
     h.service.run([_row(0, ID_1)])
-    assert h.sleeper.sleeps == [7.0]
+    assert h.sleeper.sleeps == [7.0, 7.0]  # ritmo inicial y reintento
 
 
 # --- Respaldo, un solo uso, enmascarado ---------------------------------------------------------
@@ -733,11 +743,35 @@ def test_masked_id_of_invalid_rows(make: Callable[..., Harness]) -> None:
 def test_failed_fallback_of_copy_source_uses_manual_contingency_source(
     make: Callable[..., Harness],
 ) -> None:
+    primary = DocumentCopySource(FakeSource({ID_1: QueryTimeout}), FixedClock.on(TODAY))
+    h = make(primary)
+    outcome = h.service.run([_row(0, ID_1)]).outcomes[0]
+    assert outcome.result.status is QueryStatus.TIEMPO_AGOTADO
+    assert outcome.result.source is SourceKind.CONTINGENCIA_MANUAL
+
+
+def test_portal_unavailable_goes_to_fallback_with_copy_source_primary(
+    make: Callable[..., Harness],
+) -> None:
     primary = DocumentCopySource(FakeSource({ID_1: PortalUnavailable}), FixedClock.on(TODAY))
     h = make(primary)
     outcome = h.service.run([_row(0, ID_1)]).outcomes[0]
-    assert outcome.result.status is QueryStatus.PORTAL_NO_DISPONIBLE
+    assert outcome.result.status is QueryStatus.PENDIENTE_VALIDACION_MANUAL
     assert outcome.result.source is SourceKind.CONTINGENCIA_MANUAL
+
+
+@pytest.mark.parametrize(
+    ("factory", "status"),
+    [
+        (PortalUnavailable, QueryStatus.PORTAL_NO_DISPONIBLE),
+        (HumanInterventionRequired, QueryStatus.REQUIERE_INTERVENCION_HUMANA),
+        (AccessBlocked, QueryStatus.REQUIERE_INTERVENCION_HUMANA),
+    ],
+)
+def test_translation_of_errors_with_batch_effects(
+    factory: Callable[[], RutCheckerError], status: QueryStatus
+) -> None:
+    assert translate(factory()).status is status
 
 
 def test_translate_is_the_single_mapping() -> None:
@@ -755,7 +789,7 @@ def test_paced_duplicates_with_different_notes_query_once(make: Callable[..., Ha
         ]
     )
     assert h.fake.calls_for(ID_1) == 1
-    assert h.sleeper.sleeps == []
+    assert h.sleeper.sleeps == [5.0]  # una sola consulta real, un solo ritmo inicial
     notes = [o.identification.note for o in report.outcomes if o.identification]
     assert notes == ["a", "b", None]
 

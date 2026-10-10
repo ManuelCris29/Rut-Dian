@@ -21,6 +21,7 @@ from rut_checker.domain.status import QueryStatus, SourceKind
 RUN_STARTED: Final = "run_started"
 ROW_FINISHED: Final = "row_finished"
 RETRY_SCHEDULED: Final = "retry_scheduled"
+CIRCUIT_OPENED: Final = "circuit_opened"
 BATCH_STOPPED: Final = "batch_stopped"
 RUN_FINISHED: Final = "run_finished"
 EXCEPTION: Final = "exception"
@@ -28,6 +29,7 @@ EVENT_NAMES: Final = (
     RUN_STARTED,
     ROW_FINISHED,
     RETRY_SCHEDULED,
+    CIRCUIT_OPENED,
     BATCH_STOPPED,
     RUN_FINISHED,
     EXCEPTION,
@@ -78,6 +80,13 @@ class RunLog:
                 "id_masked": id_masked,
                 "attempt": attempt,
             },
+        )
+
+    def circuit_opened(self, row_index: int, reason_code: str) -> None:
+        """Se abrió el circuito en la fila indicada; `reason_code` es un `StopReason`."""
+        self._logger.warning(
+            CIRCUIT_OPENED,
+            extra={"event": CIRCUIT_OPENED, "row_index": row_index, "error_code": reason_code},
         )
 
     def batch_stopped(self, row_index: int, reason_code: str) -> None:

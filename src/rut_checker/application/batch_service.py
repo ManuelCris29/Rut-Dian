@@ -19,12 +19,18 @@ Decisiones (ARQUITECTURA §5.3, §7 y §8; T-35):
   registra solo clase y código `UNEXPECTED`, la fila se trata como `StructureChanged`
   (`ESTRUCTURA_CAMBIADA`), el lote se detiene y las filas restantes pasan por `fallback`.
   Nunca se registra ni se guarda el texto de la excepción.
-- Reintentos: `RetryPolicy` inyectable (por defecto `NoRetry`) con salvaguardas propias del
-  servicio (`bounded_retry_delay`): errores que nunca se reintentan, tope `MAX_ATTEMPTS` y
-  retrasos no finitos o negativos descartados. El ritmo lo aplica `Pacer`.
-- El respaldo debe ser local: se rechaza un `fallback` con `paced=True` o del portal.
-- `operator` queda inyectado para T-45 (bloqueos). `run` es de un solo uso y cierra `primary`
-  y `fallback` al terminar (`finally`).
+- Reintentos: `RetryPolicy` inyectable (por defecto `NoRetry`; la real es `BackoffRetryPolicy`)
+  con salvaguardas propias del servicio (`bounded_retry_delay`). El ritmo lo aplica `Pacer`,
+  también antes de la primera llamada de cada ejecución.
+- Paradas y circuito (T-45, `circuit.py`): `PortalUnavailable` agotado abre el circuito y esa fila
+  va al respaldo; 3 `QueryTimeout` seguidos lo abren; 3 `SessionExpired`/`IncompleteResult` seguidos
+  lo abren (`REPEATED_SESSION_FAILURES`); 2 bloqueos seguidos detienen el lote y el
+  1.º pregunta al operador (sin identificación en el mensaje). Si la política lanza una
+  excepción, el informe es parcial (parada `UNEXPECTED_ERROR`); si lo hace el operador, cuenta
+  como que declina (`OPERATOR_DECLINED`, se registra `OPERATOR_FAILED`). `KeyboardInterrupt`
+  se propaga tras cerrar las fuentes (`finally`): el operador cancela, no se devuelve informe.
+- El respaldo debe ser local: se rechaza un `fallback` con `paced=True` o del portal. `run` es de
+  un solo uso y cierra `primary` y `fallback` al terminar (`finally`).
 """
 
 import logging
@@ -32,7 +38,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
 
+from rut_checker.application.circuit import CIRCUIT_REASONS, Streaks
 from rut_checker.application.clock import Sleeper
+from rut_checker.application.dedupe import DedupeCache
 from rut_checker.application.pacing import Pacer
 from rut_checker.application.report import BatchReport, StopReason
 from rut_checker.application.retry_policy import NoRetry, RetryPolicy, bounded_retry_delay
@@ -46,21 +54,14 @@ from rut_checker.application.row_results import (
 from rut_checker.application.run_log import RunLog
 from rut_checker.application.translation import UNEXPECTED, result_for, translate
 from rut_checker.domain.errors import InvalidIdentification, RutCheckerError
-from rut_checker.domain.models import (
-    CopyEvidence,
-    IdentificationInput,
-    InputRow,
-    QueryOutcome,
-    RutResult,
-)
+from rut_checker.domain.models import IdentificationInput, InputRow, QueryOutcome, RutResult
 from rut_checker.domain.status import SourceKind
 from rut_checker.ports.clock import Clock
 from rut_checker.ports.operator import OperatorPort
 from rut_checker.ports.rut_source import RutSourcePort
 
 UNEXPECTED_LOG_CODE = "UNEXPECTED"
-
-type _DedupeKey = tuple[str, CopyEvidence | None, str | None]
+OPERATOR_LOG_CODE = "OPERATOR_FAILED"
 
 
 class BatchSettings(Protocol):
@@ -77,7 +78,8 @@ class _RunState:
     """Estado mutable de una ejecución."""
 
     pacer: Pacer
-    cache: dict[_DedupeKey, RutResult] = field(default_factory=dict)
+    cache: DedupeCache
+    streaks: Streaks = field(default_factory=Streaks)
     stop_reason: StopReason | None = None
 
 
@@ -100,7 +102,7 @@ class BatchQueryService:
         Args:
             primary: Fuente principal (portal, copia del RUT, contingencia o pruebas).
             fallback: Fuente local para las filas posteriores a una parada del lote.
-            operator: Canal con el operador (lo usará T-45 para bloqueos).
+            operator: Canal con el operador (pregunta al 1.º bloqueo seguido).
             clock: Reloj (`America/Bogota`) para `queried_at` y duraciones.
             sleeper: Espera inyectable (ritmo y backoff).
             settings: Configuración de ritmo.
@@ -132,7 +134,10 @@ class BatchQueryService:
             raise RuntimeError("BatchQueryService es de un solo uso")
         self._consumed = True
         self._log.run_started(self._primary.kind, self._clock.now())
-        state = _RunState(Pacer(self._sleeper, self._settings.min_delay_between_queries_s))
+        state = _RunState(
+            Pacer(self._sleeper, self._settings.min_delay_between_queries_s),
+            DedupeCache(self._primary.paced),
+        )
         try:
             outcomes = tuple(self._process_row(row, state) for row in rows)
         finally:
@@ -151,25 +156,18 @@ class BatchQueryService:
             return self._finish(row, None, self._invalid_result(error), started, 0)
         if ident.possible_glued_check_digit:
             return self._finish(row, ident, pending_result(GLUED_REASON), started, 0)
-        key = self._dedupe_key(ident)
-        cached = state.cache.get(key)
+        stopped = state.stop_reason is not None
+        cached = state.cache.lookup(ident, stopped=stopped)
         if cached is not None:
             return self._finish(row, ident, cached, started, 0)
-        if state.stop_reason is None:
+        if not stopped:
             result, attempt = self._query_primary(row, ident, state)
+            # `PortalUnavailable` agotado detiene el lote y resuelve esta fila con el respaldo
+            by_fallback = state.stop_reason is StopReason.PORTAL_UNAVAILABLE
         else:
-            result, attempt = self._query_fallback(row, ident, state), 1
-        state.cache[key] = result
+            result, attempt, by_fallback = self._query_fallback(row, ident, state), 1, True
+        state.cache.store(ident, result, by_fallback=by_fallback)
         return self._finish(row, ident, result, started, attempt)
-
-    def _dedupe_key(self, ident: IdentificationInput) -> _DedupeKey:
-        """Con fuente externa (`paced`) solo cuenta la identificación: copia y nota no cambian
-        lo que devuelve el portal y cada consulta extra pesa sobre la DIAN (RF-11, RNF-02).
-        Con fuentes locales cuenta también la evidencia y la nota (espacios normalizados)."""
-        if self._primary.paced:
-            return (ident.identification, None, None)
-        note = " ".join(ident.note.split()) if ident.note else None
-        return (ident.identification, ident.copy_evidence, note)
 
     def _invalid_result(self, error: InvalidIdentification) -> RutResult:
         return result_for(translate(error), self._primary.kind)
@@ -205,16 +203,23 @@ class BatchQueryService:
         while True:
             state.pacer.before_call(self._primary.paced, retry_delay)
             try:
-                return self._primary.query(ident), attempt
+                result = self._primary.query(ident)
             except RutCheckerError as error:
-                delay = bounded_retry_delay(self._retry_policy, error, attempt)
-                if delay is None:
-                    return self._failed(error, row, ident, state), attempt
-                self._log.retry_scheduled(row.row_index, masked_id(row, ident), attempt)
-                attempt += 1
-                retry_delay = delay
+                failure = error
             except Exception as error:  # parada segura ante cualquier error no previsto
                 return self._unexpected(error, row, ident, state), attempt
+            else:
+                state.streaks.observe_result(result.status)
+                return result, attempt
+            try:
+                delay = bounded_retry_delay(self._retry_policy, failure, attempt)
+            except Exception as error:  # una política rota no debe perder el lote
+                return self._unexpected(error, row, ident, state), attempt
+            if delay is None:
+                return self._failed(failure, row, ident, state), attempt
+            self._log.retry_scheduled(row.row_index, masked_id(row, ident), attempt)
+            attempt += 1
+            retry_delay = delay
 
     def _query_fallback(
         self, row: InputRow, ident: IdentificationInput, state: _RunState
@@ -234,9 +239,30 @@ class BatchQueryService:
         translation = translate(error)
         if translation.unexpected:
             return self._unexpected(error, row, ident, state)
-        if translation.stop is not None:
-            self._stop(translation.stop, row, state)
+        verdict = state.streaks.on_failure(error)
+        stop = translation.stop or verdict.stop
+        if stop is None and verdict.ask_operator:
+            stop = self._ask_operator(row, ident)
+        if stop is None:
+            return result_for(translation, self._primary.kind)
+        self._stop(stop, row, state)
+        if verdict.row_to_fallback:
+            return self._query_fallback(row, ident, state)
         return result_for(translation, self._primary.kind)
+
+    def _ask_operator(self, row: InputRow, ident: IdentificationInput) -> StopReason | None:
+        """Primer bloqueo seguido: `None` si el operador continúa, o el motivo de parada."""
+        message = (
+            f"Verificación de seguridad no resuelta en la fila {row.row_index + 1}. "
+            "¿Continuar con el lote?"
+        )
+        try:
+            if self._operator.confirm_continue(message):
+                return None
+        except Exception as error:  # sin respuesta equivale a que no (ADR-0003 §4)
+            self._log.error(error, OPERATOR_LOG_CODE, row.row_index, masked_id(row, ident))
+            return StopReason.OPERATOR_DECLINED
+        return StopReason.OPERATOR_DECLINED
 
     def _unexpected(
         self, error: Exception, row: InputRow, ident: IdentificationInput, state: _RunState
@@ -248,6 +274,8 @@ class BatchQueryService:
 
     def _stop(self, reason: StopReason, row: InputRow, state: _RunState) -> None:
         state.stop_reason = reason
+        if reason in CIRCUIT_REASONS:
+            self._log.circuit_opened(row.row_index, reason.value)
         self._log.batch_stopped(row.row_index, reason.value)
 
     def _close_sources(self) -> None:

@@ -133,10 +133,12 @@ src/rut_checker/
     clock.py                      # Clock(Protocol): now() aware y today() en America/Bogota
   application/
     clock.py                      # Sleeper (Protocol) + SystemClock (implementación de sistema, T-35)
-    retry_policy.py               # RetryPolicy (Protocol) + NoRetry (T-35); la política real y el circuito son T-45
+    retry_policy.py               # RetryPolicy (Protocol), NoRetry, BackoffRetryPolicy.from_settings (T-45), bounded_retry_delay
+    dedupe.py                     # DedupeCache: clave según quién resuelve la fila (T-45)
+    circuit.py                    # Streaks/Verdict: rachas de bloqueos (2) y TIEMPO_AGOTADO (3), circuito por PortalUnavailable (T-45)
     batch_service.py              # BatchQueryService + BatchSettings (Protocol: application no importa infra);
                                   # único lugar de la traducción excepción -> QueryStatus
-    report.py                     # BatchReport, StopReason (STRUCTURE_CHANGED, UNEXPECTED_ERROR)
+    report.py                     # BatchReport, StopReason (STRUCTURE_CHANGED, UNEXPECTED_ERROR, PORTAL_UNAVAILABLE, REPEATED_TIMEOUTS, REPEATED_SESSION_FAILURES, REPEATED_BLOCKS, OPERATOR_DECLINED)
     row_input.py                  # InputRow -> IdentificationInput (copia y nota)
     row_results.py                # resultados pendientes, nota de parada, id enmascarado
     run_log.py                    # RunLog: eventos del catálogo LogEvent con nombres literales (application no
@@ -310,7 +312,20 @@ crudo ni el texto de una excepción de terceros (Obs-3, Obs-7):
   (RF-11, ritmo responsable). `RUT_MAX_RETRIES` ≤ 2 = `MAX_ATTEMPTS - 1`, amarrado por prueba.
 - `ERROR_EXPORTACION` es de **ejecución**: las filas conservan su estado.
 - El ritmo (`RUT_MIN_DELAY_BETWEEN_QUERIES_S`) se aplica antes de cada llamada a una fuente con
-  `paced=True`, incluidos los reintentos.
+  `paced=True`, incluidos los reintentos y la **primera** de cada ejecución (L-3).
+- **Políticas del lote (T-45):** `HumanInterventionRequired` y `AccessBlocked` cuentan ambos como bloqueo.
+  Los contadores de bloqueos y de `TIEMPO_AGOTADO` seguidos se reinician solo con `EXITOSA` o
+  `SIN_RESULTADOS`. La fila que agota `PortalUnavailable` se resuelve con el respaldo (queda
+  `PENDIENTE_VALIDACION_MANUAL`); la 3.ª `TIEMPO_AGOTADO` conserva su estado y el circuito afecta al resto.
+  Si la política de reintentos o el operador lanzan una excepción, el informe es parcial
+  (`UNEXPECTED_ERROR`, restantes al respaldo); si el operador lanza una excepción cuenta como que declina
+  (`OPERATOR_DECLINED`, se registra `OPERATOR_FAILED`). `KeyboardInterrupt` se propaga tras cerrar las fuentes.
+- **Fallos de sesión (O-1):** 3 `SESION_VENCIDA`/`RESULTADO_INCOMPLETO` seguidos (contador común, tras sus
+  reintentos) abren el circuito (`REPEATED_SESSION_FAILURES`, nota "Lote detenido: fallos de sesión repetidos").
+- **Dedupe (`application/dedupe.py`):** consulta real a primaria `paced` -> clave solo identificación; fila
+  resuelta por el respaldo -> `(identificación, evidencia, nota)`. Tras una parada solo se reutiliza un resultado
+  previo de la primaria si fue `EXITOSA` o `SIN_RESULTADOS`.
+- `PORTAL_NO_DISPONIBLE` es estado intermedio: la fila final queda `PENDIENTE_VALIDACION_MANUAL`.
 
 ## 8. Secuencias
 

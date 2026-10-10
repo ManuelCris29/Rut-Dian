@@ -73,7 +73,8 @@ un doble programable.
 
 1. Registrar evento `challenge_detected` (id enmascarado, `row_index`, `attempt`).
 2. `OperatorPort.notify("Se detectó una verificación de seguridad del portal. Resuélvala en la
-   ventana del navegador. Esperando hasta {N} s… (fila {row_index}, id {id_enmascarado})")`.
+   ventana del navegador. Esperando hasta {N} s… (fila {row_index})")`. El aviso lleva solo el número de fila, no la identificación (ni enmascarada);
+   lo mismo vale para la pregunta `confirm_continue` del servicio (§4).
 3. Esperar **pasivamente** a que el elemento esperado sea visible:
    `expected.wait_for(state="visible", timeout=RUT_HUMAN_CHALLENGE_TIMEOUT_S*1000)`.
 4. Si aparece → evento `challenge_resolved` (con `duration_ms`) y se continúa en el paso 3/4 del orden

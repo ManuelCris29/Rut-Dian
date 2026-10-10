@@ -7,7 +7,7 @@ Cada consulta termina en **exactamente un** `QueryStatus`. El mensaje al usuario
 | `EXITOSA` | Resultado extraído y validado | — | — | "Consulta completada" |
 | `SIN_RESULTADOS` | El canal indica que no hay registro | No | Revisar número con el solicitante | "La DIAN no devolvió registro para este número" |
 | `ENTRADA_INVALIDA` | Vacío, no numérico, longitud fuera de rango, DV incorrecto | No | Corregir dato de entrada | "Número inválido: {motivo}" |
-| `PORTAL_NO_DISPONIBLE` | HTTP 5xx, página de mantenimiento, DNS/conexión | Sí (máx 2, backoff 30 s/120 s) | Si persiste → contingencia | "El servicio de la DIAN no está disponible" |
+| `PORTAL_NO_DISPONIBLE` | HTTP 5xx, página de mantenimiento, DNS/conexión. **Estado intermedio**: no aparece en la salida; al agotar los reintentos la fila queda `PENDIENTE_VALIDACION_MANUAL` ("Lote detenido: portal no disponible") | Sí (máx 2, backoff 30 s/120 s) | Si persiste → contingencia | "El servicio de la DIAN no está disponible" |
 | `TIEMPO_AGOTADO` | Navegación o espera de resultado > timeout | Sí (máx 2) | Revisar conectividad | "Se agotó el tiempo de espera" |
 | `ESTRUCTURA_CAMBIADA` | Selector obligatorio ausente | **No** — detiene el lote | Actualizar `selectors.yaml` + fixture | "El portal cambió; se requiere mantenimiento" |
 | `RESULTADO_INCOMPLETO` | Faltan campos obligatorios en el resultado | No | Revisión manual | "Resultado incompleto" |
@@ -23,6 +23,7 @@ Cada consulta termina en **exactamente un** `QueryStatus`. El mensaje al usuario
 - Bloqueo detectado 2 veces seguidas → el lote **se detiene** (no seguir insistiendo contra el portal).
 - `ESTRUCTURA_CAMBIADA` → se detiene el lote. El snapshot de diagnóstico está **desactivado por defecto** (D-5, 2026-10-09); solo con `RUT_DIAGNOSTIC_SNAPSHOT=true` y `RUT_PORTAL_APPROVAL_REF` vigente se guarda un esqueleto estructural sin textos ni valores en `logs/snapshot_<run_id>_<row_index>.html` (nunca screenshot, trace, video ni HAR; retención 30 días). Ver `docs/ARQUITECTURA.md` §10.
 - 3 `TIEMPO_AGOTADO` seguidos (tras sus reintentos; el contador se reinicia con `EXITOSA` o `SIN_RESULTADOS`) → se abre el circuito: el resto del lote va a la fuente de respaldo (constante, no configurable).
+- 3 `SESION_VENCIDA` o `RESULTADO_INCOMPLETO` seguidos (tras sus reintentos; comparten contador, que se reinicia con `EXITOSA` o `SIN_RESULTADOS`) → se abre el circuito: el resto del lote va al respaldo con "Lote detenido: fallos de sesión repetidos" (constante, no configurable).
 - `ERROR_EXPORTACION` es de nivel ejecución (código de salida 3): las filas conservan su estado.
 - `ERROR_ALMACENAMIENTO` no se implementa: no hay base de datos (ARQUITECTURA §12).
 - Ningún error técnico se traduce en un `estado_rut` inventado.
