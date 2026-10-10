@@ -279,7 +279,7 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 | Comando | Descripción | Código de salida |
 |---|---|---|
 | `rut-checker lote <archivo> [--salida DIR]` | Procesa el lote y escribe el Excel | 0 completo · 1 lote detenido · 2 error de entrada/config · 3 error de exportación |
-| `rut-checker consultar [--dv D] [--fecha-copia AAAA-MM-DD --responsable USR]` | Lote de 1 fila. El número se pide por **prompt** si no se pasa como argumento (evita el historial de PowerShell, Obs-11); imprime resumen con id enmascarado y escribe el Excel | igual |
+| `rut-checker consultar [--dv D] [--fecha-copia AAAA-MM-DD --responsable USR]` | Lote de 1 fila. El número se pide por **prompt** si no se pasa como argumento (evita el historial de PowerShell, Obs-11); imprime resumen con id enmascarado y escribe el Excel. Sin número y sin terminal interactiva: código 2. Con el número como argumento avisa que quedó en el historial. Una fila `ENTRADA_INVALIDA` da código 2 (el Excel se conserva) | igual |
 | `rut-checker purgar [--confirmar] [--fuente PORTAL_DIAN_C1]` | Lista (o elimina con `--confirmar`) lo vencido en `data/`, `output/`, `logs/` | 0 / 2 |
 
 - `--salida` debe resolverse **dentro de** `RUT_OUTPUT_DIR`; si no → código 2. `RUT_OUTPUT_DIR`,
@@ -288,6 +288,12 @@ Pruebas de arquitectura con `ast` (T-30, extendida en T-49):
 - El JSON de respaldo de `ERROR_EXPORTACION` se escribe siempre en `RUT_OUTPUT_DIR`.
 - Al iniciar `lote` o `consultar`, si hay archivos vencidos se imprime un aviso "Hay N archivos con más de
   365 días: ejecute `rut-checker purgar`" (Obs-10).
+- Los errores de uso de Click (argumento de más, opción desconocida, subcomando inexistente) se
+  sustituyen por un mensaje genérico con código 2 que **no repite lo escrito** (podría ser un id);
+  solo un argumento obligatorio ausente conserva su nombre. Con la salida redirigida (no terminal)
+  stdout/stderr se fuerzan a UTF-8 (RNF-06). Un fallo inesperado deja en el log `error_code=UNEXPECTED`,
+  la clase y hasta 8 sitios `archivo:línea:función` (sin mensajes) y en consola solo la clase; el log se
+  cierra después de exportar y `export_failed` se emite ante `ERROR_EXPORTACION` o respaldo JSON.
 - `--formato json|csv` solo si se implementa el *Could* de RF-06 (T-47).
 
 ## 7. Errores y traducción a `QueryStatus`
@@ -501,6 +507,8 @@ real (`AAAAMMDD` válida); `PORTAL_URL` `https`, host con fullmatch `([a-z0-9-]+
 Constantes no configurables: 2 bloqueos seguidos detienen el lote; 3 `TIEMPO_AGOTADO` seguidos abren el
 circuito; copia ≤ 30 días; retención de snapshots 30 días; zona `America/Bogota`.
 `.env` real nunca se lee ni versiona; la CI no define variables `RUT_*` reales.
+El `.env` se lee desde el directorio de trabajo (cwd); la CLI avisa por stderr qué archivo cargó (solo la ruta). Una
+`RUT_SELECTORS_PATH` relativa se interpreta respecto a la raíz del proyecto, no al cwd.
 
 **Llave 3 y puerta única (T-37, `adapters/dian_portal/selectors.py`).**
 - La raíz del proyecto se ancla al paquete (`pyproject.toml` con `name = "rut-checker"` encontrado desde

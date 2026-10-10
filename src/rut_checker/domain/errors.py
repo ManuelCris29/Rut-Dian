@@ -159,12 +159,13 @@ class ExportError(RutCheckerError):
 
 
 class SourceNotEnabledReason(StrEnum):
-    """Conjunto cerrado de motivos por los que el portal no está habilitado (llaves 1 y 2)."""
+    """Motivos cerrados por los que el portal no se habilita (llaves 1 y 2, adaptador)."""
 
     FLAG_DISABLED = "la fuente dian_portal está deshabilitada"
     MISSING_APPROVAL_REF = "falta una referencia de aprobación válida"
     INVALID_URL = "la URL del portal no es válida"
     HEADLESS_NOT_ALLOWED = "el navegador del portal debe ser visible"
+    PORTAL_ADAPTER_PENDING = "el adaptador del portal aún no está disponible"
 
 
 class SourceNotEnabledError(RutCheckerError):

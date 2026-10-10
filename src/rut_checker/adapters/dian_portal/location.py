@@ -48,6 +48,11 @@ def _project_root() -> Path:
     return root
 
 
+def project_root() -> Path:
+    """Raíz del proyecto (ancla al paquete); `OUTSIDE_PROJECT` si no hay árbol de proyecto."""
+    return _project_root()
+
+
 def _check_location(path: Path, root: Path) -> None:
     """Solo `<raíz>/config/selectors.yaml`, sin enlaces simbólicos ni junctions."""
     expected = root / "config" / "selectors.yaml"

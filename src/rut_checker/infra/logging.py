@@ -16,173 +16,40 @@ Garantías:
   enmascarar se enmascara de nuevo, y cualquier otro contenido se descarta.
 - Los campos estructurados (`ts`, `started_at`, `run_id`, contadores) no pasan por el enmascarado.
 - `configure_logging` silencia `rut_checker` y `py.warnings` (NullHandler, sin propagación).
+- `silence_unconfigured_loggers` (CLI) pone un `NullHandler` en el root: un logger de terceros
+  sin configurar (Playwright, asyncio) no cae en `logging.lastResort` ni escribe a stderr.
 """
 
-import json
 import logging
 import os
 import re
-from datetime import datetime
-from enum import StrEnum
 from pathlib import Path
 from typing import Final
-from zoneinfo import ZoneInfo
 
-from rut_checker.domain.masking import mask_digit_runs, mask_identification
-from rut_checker.domain.status import QueryStatus, SourceKind
+from rut_checker.infra.log_format import (
+    ERROR_CODE,
+    JsonlFormatter,
+    LogEvent,
+    MaskingFilter,
+    trace_sites_of,
+)
+
+__all__ = [
+    "JsonlFormatter",
+    "LogEvent",
+    "MaskingFilter",
+    "close_logging",
+    "close_run_logging",
+    "configure_logging",
+    "log_exception",
+    "log_export_failed",
+    "silence_unconfigured_loggers",
+]
 
 _RUN_ID_PATTERN: Final = re.compile(r"[0-9]{8}-[0-9]{6}-[0-9a-f]{4}", re.ASCII)
-_ERROR_CODE: Final = re.compile(r"[A-Z_]{1,40}", re.ASCII)
-_ERROR_CLASS: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}", re.ASCII)
-_SELECTORS_VERSION: Final = re.compile(r"v?[0-9]{1,4}(\.[0-9]{1,4}){0,3}", re.ASCII)
-_MASKED_ID: Final = re.compile(r"\*+[0-9]{0,4}", re.ASCII)
-_DIGITS_ID: Final = re.compile(r"[0-9][0-9.,/ -]*", re.ASCII)
-_TIMEZONE: Final = ZoneInfo("America/Bogota")
 _LOGGER_PREFIX: Final = "rut_checker.run."
 _PACKAGE_LOGGER: Final = "rut_checker"
 _WARNINGS_LOGGER: Final = "py.warnings"
-_INT_FIELDS: Final = ("row_index", "attempt", "duration_ms")
-
-
-class LogEvent(StrEnum):
-    """Catálogo cerrado de eventos (ARQUITECTURA §10); lo demás se registra como `UNLISTED`."""
-
-    RUN_STARTED = "run_started"
-    ROW_FINISHED = "row_finished"
-    RETRY_SCHEDULED = "retry_scheduled"
-    CIRCUIT_OPENED = "circuit_opened"
-    CHALLENGE_DETECTED = "challenge_detected"
-    CHALLENGE_RESOLVED = "challenge_resolved"
-    CHALLENGE_TIMEOUT = "challenge_timeout"
-    BATCH_STOPPED = "batch_stopped"
-    EXPORT_FAILED = "export_failed"
-    SNAPSHOT_SAVED = "snapshot_saved"
-    PURGE_EXECUTED = "purge_executed"
-    RUN_FINISHED = "run_finished"
-    EXCEPTION = "exception"
-    UNLISTED = "unlisted_event"
-
-
-def _enum_value[E: StrEnum](enum_type: type[E], value: object) -> str | None:
-    """Valor del miembro del enum si `value` es exactamente uno de ellos; si no, `None`."""
-    if not isinstance(value, str):
-        return None
-    try:
-        return enum_type(value).value
-    except ValueError:
-        return None
-
-
-def _pattern_value(pattern: re.Pattern[str], value: object) -> str | None:
-    """`value` si es texto que cumple el patrón completo y no contiene números largos."""
-    if isinstance(value, str) and pattern.fullmatch(value) and mask_digit_runs(value) == value:
-        return value
-    return None
-
-
-def _plain_int(value: object) -> int | None:
-    """Entero estricto (excluye `bool`)."""
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    return None
-
-
-def _safe_message(record: logging.LogRecord) -> str:
-    """Mensaje formateado; vacío si el formateo falla (no se filtra texto ajeno)."""
-    try:
-        return record.getMessage()
-    except Exception:
-        return ""
-
-
-def _event_name(record: logging.LogRecord) -> str:
-    declared = getattr(record, "event", None)
-    candidate = declared if declared is not None else _safe_message(record)
-    return _enum_value(LogEvent, candidate) or LogEvent.UNLISTED.value
-
-
-def _masked_id(value: object) -> str | None:
-    """`id_masked` ya enmascarado; un número sin enmascarar se enmascara; lo demás se descarta."""
-    if not isinstance(value, str):
-        return None
-    if _MASKED_ID.fullmatch(value):
-        return value
-    if _DIGITS_ID.fullmatch(value):
-        return mask_identification(value)
-    return None
-
-
-def _counts(value: object) -> dict[str, int]:
-    if not isinstance(value, dict):
-        return {}
-    result: dict[str, int] = {}
-    for key, count in value.items():
-        status = _enum_value(QueryStatus, key)
-        number = _plain_int(count)
-        if status is not None and number is not None:
-            result[status] = number
-    return result
-
-
-def _optional_fields(record: logging.LogRecord) -> dict[str, object]:
-    """Campos opcionales permitidos, validados por tipo; lo que no cumple se descarta."""
-    fields: dict[str, object] = {
-        "id_masked": _masked_id(getattr(record, "id_masked", None)),
-        "source": _enum_value(SourceKind, getattr(record, "source", None)),
-        "status": _enum_value(QueryStatus, getattr(record, "status", None)),
-        "error_code": _pattern_value(_ERROR_CODE, getattr(record, "error_code", None)),
-        "error_class": _pattern_value(_ERROR_CLASS, getattr(record, "error_class", None)),
-        "selectors_version": _pattern_value(
-            _SELECTORS_VERSION, getattr(record, "selectors_version", None)
-        ),
-    }
-    for name in _INT_FIELDS:
-        fields[name] = _plain_int(getattr(record, name, None))
-    started_at = getattr(record, "started_at", None)
-    if isinstance(started_at, datetime) and started_at.utcoffset() is not None:
-        fields["started_at"] = started_at.astimezone(_TIMEZONE).isoformat()
-    raw_counts = getattr(record, "counts", None)
-    if isinstance(raw_counts, dict):
-        fields["counts"] = _counts(raw_counts)
-    return {key: value for key, value in fields.items() if value is not None}
-
-
-class MaskingFilter(logging.Filter):
-    """Enmascara en el registro cualquier secuencia que parezca una identificación.
-
-    Formatea el mensaje con sus argumentos, enmascara el resultado y deja `args` vacío;
-    así también se cubren argumentos no textuales (enteros) y mapeos. Si el formateo
-    falla, el mensaje queda vacío. `exc_info`, `exc_text` y `stack_info` se eliminan sin
-    renderizar el traceback (ni la excepción ni sus `__cause__`/`__context__` llegan al log).
-    """
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        record.msg = mask_digit_runs(_safe_message(record))
-        record.args = None
-        record.exc_info = None
-        record.exc_text = None
-        record.stack_info = None
-        return True
-
-
-class JsonlFormatter(logging.Formatter):
-    """Formateador JSON de una línea que emite solo campos permitidos y tipados."""
-
-    def __init__(self, run_id: str) -> None:
-        super().__init__()
-        self._run_id = run_id
-
-    def format(self, record: logging.LogRecord) -> str:
-        """Serializa el registro; ignora `exc_info`, `exc_text` y `stack_info`."""
-        payload: dict[str, object] = {
-            "ts": datetime.fromtimestamp(record.created, _TIMEZONE).isoformat(
-                timespec="milliseconds"
-            ),
-            "event": _event_name(record),
-            "run_id": self._run_id,
-            **_optional_fields(record),
-        }
-        return json.dumps(payload, ensure_ascii=False, allow_nan=False)
 
 
 class _RunFileHandler(logging.FileHandler):
@@ -206,6 +73,19 @@ def _silence_outside_run() -> None:
             outer.addHandler(logging.NullHandler())
         outer.propagate = False
     logging.captureWarnings(True)
+
+
+def silence_unconfigured_loggers() -> None:
+    """Evita que los loggers sin configurar escriban a stderr (`logging.lastResort`).
+
+    Añade un `NullHandler` al logger raíz (una sola vez). Se hace con un handler y no con
+    `lastResort = None` porque, sin handlers, Python escribiría en stderr el aviso "No handlers
+    could be found for logger ...". Los loggers con handlers propios (el de la ejecución) no
+    cambian. Lo llama la CLI al arrancar.
+    """
+    root = logging.getLogger()
+    if not any(isinstance(h, logging.NullHandler) for h in root.handlers):
+        root.addHandler(logging.NullHandler())
 
 
 def configure_logging(run_id: str, log_dir: Path) -> logging.Logger:
@@ -274,8 +154,9 @@ def log_exception(
     *,
     row_index: int | None = None,
     id_masked: str | None = None,
+    with_trace: bool = False,
 ) -> None:
-    """Registra una excepción solo con su clase y un código; nunca `str`/`repr`/traceback.
+    """Registra una excepción solo con su clase y un código; nunca `str`/`repr`/mensajes.
 
     Args:
         logger: Logger de la ejecución.
@@ -283,8 +164,10 @@ def log_exception(
         error_code: Código de error (`[A-Z_]{1,40}`).
         row_index: Fila afectada, si aplica.
         id_masked: Identificación ya enmascarada con `mask_identification`, si aplica.
+        with_trace: Añade los últimos sitios `archivo:línea:función` del traceback (solo el nombre
+            del archivo, sin mensajes ni código fuente) para poder diagnosticar un fallo inesperado.
     """
-    if _ERROR_CODE.fullmatch(error_code) is None:
+    if ERROR_CODE.fullmatch(error_code) is None:
         raise ValueError("error_code inválido (se espera [A-Z_]{1,40})")
     extra: dict[str, object] = {
         "event": LogEvent.EXCEPTION,
@@ -295,4 +178,34 @@ def log_exception(
         extra["row_index"] = row_index
     if id_masked is not None:
         extra["id_masked"] = id_masked
+    if with_trace:
+        extra["error_trace"] = trace_sites_of(exc)
     logger.error(LogEvent.EXCEPTION.value, extra=extra)
+
+
+def log_export_failed(logger: logging.Logger, error_code: str, error_class: str) -> None:
+    """Registra el evento `export_failed` (ERROR_EXPORTACION o respaldo JSON) sin detalles."""
+    if ERROR_CODE.fullmatch(error_code) is None:
+        raise ValueError("error_code inválido (se espera [A-Z_]{1,40})")
+    logger.error(
+        LogEvent.EXPORT_FAILED.value,
+        extra={
+            "event": LogEvent.EXPORT_FAILED,
+            "error_code": error_code,
+            "error_class": error_class,
+        },
+    )
+
+
+def close_run_logging(run_id: str) -> None:
+    """Cierra el logger de la ejecución `run_id` (no hace nada si no estaba configurado).
+
+    Permite a quien solo conoce el `run_id` (la CLI) liberar el archivo sin llamar a
+    `logging.getLogger`.
+
+    Raises:
+        ValueError: Si `run_id` no tiene el formato esperado.
+    """
+    if _RUN_ID_PATTERN.fullmatch(run_id) is None:
+        raise ValueError("run_id con formato inválido (se espera AAAAMMDD-HHMMSS-<4 hex>)")
+    close_logging(logging.getLogger(f"{_LOGGER_PREFIX}{run_id}"))

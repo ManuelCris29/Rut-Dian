@@ -7,12 +7,15 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
-    "typer>=0.12",
+    "typer>=0.27,<0.28",
     "openpyxl>=3.1",
     "python-stdnum>=1.20",
     "defusedxml>=0.7",
     "tzdata>=2024.1",
 ]
+
+[project.scripts]
+rut-checker = "rut_checker.cli:app"
 
 [project.optional-dependencies]
 # Canal del portal (ADR-0001): solo se instala en el equipo del operador.
